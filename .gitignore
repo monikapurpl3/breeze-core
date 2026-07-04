@@ -1,0 +1,21 @@
+# Python
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Runtime state / secrets — NEVER commit
+config.json
+devices.json
+programs.json
+*.local.json
+
+# Env / editors / OS
+.env
+.idea/
+*.iml
+*.swp
+.DS_Store

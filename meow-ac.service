@@ -1,0 +1,63 @@
+[Unit]
+Description=meow-ac - web control for Midea AC (behind nginx TLS)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=meow-ac
+Group=meow-ac
+# The app is the `meow_ac` package; WorkingDirectory must be the app
+# root so `meow_ac.app:app` imports and the static/ dir is found.
+WorkingDirectory=/opt/meow-ac
+Environment=AC_CONFIG=/etc/meow-ac/config.json
+Environment=AC_DEVICES=/etc/meow-ac/devices.json
+Environment=AC_BEHIND_PROXY=1
+Environment=AC_TRUSTED_HOSTS=breeze.example.com,127.0.0.1,localhost
+Environment=AC_ENROLL_LAN_ONLY=1
+Environment=AC_TOKEN_TTL_DAYS=90
+
+# Loopback only: nginx (TLS) is the sole way in. --proxy-headers with
+# --forwarded-allow-ips 127.0.0.1 means uvicorn trusts X-Forwarded-*
+# ONLY from the local nginx. Single worker on purpose: enrollment
+# sessions + rate-limit state are in-process.
+#
+# (LAN-only deployment without a proxy instead: bind the LAN IP, drop
+# the proxy flags and AC_BEHIND_PROXY/AC_TRUSTED_HOSTS. Never 0.0.0.0.)
+ExecStart=/opt/meow-ac/venv/bin/uvicorn meow_ac.app:app --host 127.0.0.1 --port 8420 --proxy-headers --forwarded-allow-ips 127.0.0.1
+
+Restart=on-failure
+RestartSec=5
+
+# Sandbox (see HARDENING.md §5). systemd-analyze security score: 1.7.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/etc/meow-ac
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictSUIDSGID=true
+RestrictRealtime=true
+RestrictNamespaces=true
+LockPersonality=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RemoveIPC=true
+UMask=0077
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+# Egress lockdown: only loopback + the LAN (the AC units). Even fully
+# compromised, this process cannot reach the internet.
+IPAddressAllow=127.0.0.0/8 ::1/128 192.168.1.0/24
+IPAddressDeny=any
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,42 @@
+# Example Apache (httpd) vhost for Breeze Core (see docs/REVERSE-PROXY.md).
+# RHEL/SUSE: /etc/httpd/conf.d/breeze.conf   Debian: sites-available + a2ensite
+# Needs modules: proxy proxy_http ssl headers rewrite remoteip
+# Replace breeze.example.com and the LAN CIDR; certbot --apache can add TLS.
+
+<VirtualHost *:80>
+    ServerName breeze.example.com
+    # Let certbot/webroot answer ACME challenges here, redirect the rest:
+    Alias /.well-known/acme-challenge/ /var/www/html/.well-known/acme-challenge/
+    RewriteEngine On
+    RewriteCond %{REQUEST_URI} !^/\.well-known/acme-challenge/
+    RewriteRule ^ https://%{SERVER_NAME}%{REQUEST_URI} [R=301,L]
+</VirtualHost>
+
+<VirtualHost *:443>
+    ServerName breeze.example.com
+
+    SSLEngine on
+    SSLCertificateFile    /etc/letsencrypt/live/breeze.example.com/fullchain.pem
+    SSLCertificateKeyFile /etc/letsencrypt/live/breeze.example.com/privkey.pem
+    SSLProtocol -all +TLSv1.2 +TLSv1.3
+
+    ServerTokens Prod
+    LimitRequestBody 16384
+    ProxyPreserveHost On
+    ProxyTimeout 20
+
+    # SECURITY: overwrite XFF with the real client (mod_headers) so a spoofed
+    # header can't pose as a LAN address.
+    RequestHeader set X-Forwarded-For "%{REMOTE_ADDR}s"
+    RequestHeader set X-Forwarded-Proto "https"
+
+    CustomLog /var/log/httpd/breeze.access.log combined   # fail2ban watches this
+
+    # Admin endpoints: LAN only.
+    <LocationMatch "^/api/auth/(enroll/approve|devices)">
+        Require ip 192.168.0.0/16 127.0.0.1
+    </LocationMatch>
+
+    ProxyPass        / http://127.0.0.1:8420/
+    ProxyPassReverse / http://127.0.0.1:8420/
+</VirtualHost>

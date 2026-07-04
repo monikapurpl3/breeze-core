@@ -1,0 +1,26 @@
+# Breeze Core fail2ban jails — deploy to /etc/fail2ban/jail.d/breeze-core.local.
+# Set logpath to your Breeze vhost's access log and ignoreip to your LAN.
+# See HARDENING.md §3.
+[breeze-core]
+enabled  = true
+port     = http,https
+filter   = breeze-core
+logpath  = /var/log/nginx/breeze.access.log
+maxretry = 5
+findtime = 600
+bantime  = 86400
+bantime.increment = true
+bantime.maxtime   = 5w
+ignoreip = 127.0.0.1/8 ::1 192.168.0.0/16
+
+[breeze-core-tripwire]
+enabled  = true
+port     = http,https
+filter   = breeze-core-tripwire
+logpath  = /var/log/nginx/breeze.access.log
+maxretry = 1
+findtime = 86400
+bantime  = 604800
+bantime.increment = true
+bantime.maxtime   = 8w
+ignoreip = 127.0.0.1/8 ::1 192.168.0.0/16
