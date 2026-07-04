@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Byte-compile
+        run: python -m compileall -q meow_ac setup_device.py
+      - name: Build the app factory (import smoke test)
+        env:
+          AC_CONFIG: /tmp/ci-config.json
+          AC_DEVICES: /tmp/ci-devices.json
+          AC_PROGRAMS: /tmp/ci-programs.json
+        run: python -c "import meow_ac.app; print('create_app() OK:', meow_ac.app.app.title)"

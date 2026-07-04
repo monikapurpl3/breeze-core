@@ -1,0 +1,59 @@
+name: Bug report
+description: Something in Breeze Core (server / API / web UI) isn't working
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report! **Do not paste your API key, device tokens, or full `config.json`.**
+        Redact IPs/hostnames you'd rather keep private.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you expected vs. what actually happened.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. …
+        2. …
+        3. …
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Breeze Core version / commit
+      placeholder: "e.g. main @ abc1234"
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS and Python version
+      placeholder: "e.g. AlmaLinux 10.2, Python 3.12"
+    validations:
+      required: true
+  - type: dropdown
+    id: deploy
+    attributes:
+      label: How are you running it?
+      options:
+        - systemd service
+        - manual (uvicorn)
+        - container
+        - behind nginx
+        - behind Apache
+        - other / experimental (BSD/macOS/Windows/WSL)
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: e.g. `journalctl -u breeze-core -n 50`. Redact IPs/secrets.
+      render: text

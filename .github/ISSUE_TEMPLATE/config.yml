@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/monikapurpl3/breeze-core/security/advisories/new
+    about: Please report vulnerabilities privately (see SECURITY.md) — not as public issues.
+  - name: Breeze (Android app) issues
+    url: https://github.com/monikapurpl3/breeze/issues
+    about: Bugs or requests for the mobile app belong in the app repo.
