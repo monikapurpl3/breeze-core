@@ -1,0 +1,29 @@
+# Breeze Core — example Compose. See docs/DOCKER.md for pairing + networking.
+#
+# Host networking is the simplest choice on a Linux host: it lets the app
+# discover (UDP broadcast) and reach your Midea units, and it sees real
+# client IPs so LAN-only pairing approval works directly. Bind 127.0.0.1
+# and front it with a reverse proxy (see docs/REVERSE-PROXY.md), or bind
+# your LAN IP for LAN-only use.
+
+services:
+  breeze-core:
+    # pull the published image, or build locally with `docker compose build`:
+    image: ghcr.io/monikapurpl3/breeze-core:latest
+    build: .
+    container_name: breeze-core
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      # Set these when behind a reverse proxy (see docs/REVERSE-PROXY.md):
+      # AC_BEHIND_PROXY: "1"
+      # AC_TRUSTED_HOSTS: "breeze.example.com,127.0.0.1"
+      AC_ENROLL_LAN_ONLY: "1"
+    volumes:
+      - breeze-config:/etc/breeze-core
+    # Behind a host reverse proxy → bind loopback. For LAN-only use, replace
+    # 127.0.0.1 with your host's LAN IP.
+    command: ["uvicorn", "meow_ac.app:app", "--host", "127.0.0.1", "--port", "8420"]
+
+volumes:
+  breeze-config:

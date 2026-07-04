@@ -1,0 +1,26 @@
+# keep the build context small and secret-free
+.git
+.github
+venv/
+.venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+
+# runtime state / secrets — must never enter an image
+config.json
+devices.json
+programs.json
+*.local.json
+
+# docs / app / examples not needed at runtime
+docs/
+deploy/
+breeze/
+*.md
+!README.md
+.dockerignore
+Dockerfile
+docker-compose.yml

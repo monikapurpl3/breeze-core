@@ -6,6 +6,12 @@ By default Breeze Core is LAN-only. To reach it from outside your network you pu
 
 This guide covers **nginx** and **Apache** separately, and certificates via **certbot** and **acme.sh**. Pick one web server and one ACME client.
 
+> **Want it done for you?** [`deploy/reverse-proxy-wizard.sh`](../deploy/reverse-proxy-wizard.sh) generates and installs a hardened nginx *or* Apache vhost (LAN-gated admin endpoints, anti-spoof XFF, rate limiting) and can obtain a certbot cert. Run it with **`--dry-run`** first to preview every file and command it would touch, changing nothing:
+> ```bash
+> ./deploy/reverse-proxy-wizard.sh --server nginx --domain breeze.example.com --cert certbot --email you@example.com --dry-run
+> ```
+> The manual steps below are the reference for what it produces (and for acme.sh, which the wizard defers to via `--cert existing`).
+
 ---
 
 ## 0. Prerequisites
