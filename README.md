@@ -183,9 +183,14 @@ DELETE /api/auth/devices/{id}   X-API-Key + LAN → 204                         
 
 ### Units — `/api/units` (require API key **+** device token)
 ```
-GET  /api/units                 → [{id, name, ip}]
-GET  /api/units/{id}/state      → full state (connects + refreshes the unit)
-POST /api/units/{id}/control    → full state (applies only the fields present)
+GET   /api/units                → [{id, name, ip}]
+GET   /api/units/{id}/state     → full state (connects + refreshes the unit)
+POST  /api/units/{id}/control   → full state (applies only the fields present)
+PATCH /api/units/{id}           → rename a unit (body {name}) → sanitized unit view
+POST  /api/units                → add a unit by LAN IP (body {ip, name?}); discovers
+                                   it and writes config.json → 201 sanitized unit view
+GET   /api/config               → sanitized config: [{id,name,ip,port,has_v3_credentials}]
+                                   (never returns the api_key or V3 token/key secrets)
 ```
 State object:
 ```json

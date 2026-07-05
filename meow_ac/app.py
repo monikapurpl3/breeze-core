@@ -35,6 +35,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from meow_ac.api import auth as auth_api
+from meow_ac.api import config as config_api
 from meow_ac.api import programs as programs_api
 from meow_ac.api import units as units_api
 from meow_ac.config.store import ConfigStore
@@ -123,6 +124,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         auth_api.build_auth_router(token_store, enrollment, settings, api_key_auth)
     )
     app.include_router(units_api.build_router(manager, full_auth))
+    app.include_router(config_api.build_config_router(store, manager, full_auth))
     app.include_router(
         programs_api.build_programs_router(manager, program_store, scheduler, full_auth)
     )
