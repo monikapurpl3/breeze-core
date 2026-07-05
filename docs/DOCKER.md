@@ -11,6 +11,8 @@ docker pull ghcr.io/monikapurpl3/breeze-core:latest
 docker build -t breeze-core .
 ```
 
+> **glibc vs musl.** The published image is glibc (UBI 9), which covers virtually all hosts. If you specifically need a **musl / Alpine** image (non-glibc base, smallest size), build the provided variant: `docker build -f Dockerfile.alpine -t breeze-core:alpine .`. Its builder stage carries a Rust/C toolchain so it compiles the native wheels when no musllinux wheel exists — see [INSTALL.md → Non-glibc (musl libc) systems](INSTALL.md#non-glibc-musl-libc-systems).
+
 ## The networking question (read this)
 
 Breeze Core talks to Midea units on your LAN:

@@ -2,7 +2,7 @@
 
 Self-hosted control for **Midea air conditioners** — a LAN-first REST API, a web control panel, and a diagnostic CLI, plus an optional native Android app (**Breeze**). After a one-time local pairing there is **no cloud dependency**: your units are controlled directly over your own network.
 
-Built on [msmart-ng](https://github.com/mill1000/midea-msmart) (device I/O), [FastAPI](https://fastapi.tiangolo.com/) + [uvicorn](https://www.uvicorn.org/) (HTTP), vanilla-JS ES modules (web UI), and zsh (diagnostics). Runs on any mainstream Linux distribution with systemd.
+Built on [msmart-ng](https://github.com/mill1000/midea-msmart) (device I/O), [FastAPI](https://fastapi.tiangolo.com/) + [uvicorn](https://www.uvicorn.org/) (HTTP), vanilla-JS ES modules (web UI), and zsh (diagnostics). Runs on any mainstream Linux distribution — systemd is the smoothest path, but non-systemd inits (OpenRC, runit, s6, supervisord), musl-libc distros (Alpine, Void), the BSDs, and macOS are supported too (see the install guide).
 
 > **Naming.** The project/product is **Breeze Core**. Under the hood the Python package is `meow_ac`, so the uvicorn entry point you'll see in commands is `meow_ac.app:app`. Everything else (install directory, service name, config directory) is up to you — this guide uses `/opt/breeze-core`, `breeze-core.service`, and `/etc/breeze-core`, all wired via environment variables.
 
@@ -70,7 +70,7 @@ Inside the package, work is split into small layers assembled by an app factory 
 
 ## Requirements
 
-- A Linux host with **systemd** and network access to your AC units (a small always-on machine: mini-PC, NUC, Raspberry Pi, old laptop, VM…).
+- A host with network access to your AC units (a small always-on machine: mini-PC, NUC, Raspberry Pi, old laptop, VM…). **systemd** Linux is the smoothest path and the only one with the built-in sandbox; **non-systemd inits** (OpenRC/runit/s6/supervisord), **musl-libc** distros (Alpine, Void), the **BSDs** and **macOS** are supported too — see the install guide.
 - **Python 3.11+**.
 - **Midea AC units** on the same LAN, already provisioned to your WiFi with the *NetHome Plus* app (Breeze Core does not do WiFi provisioning).
 - `curl` + `jq` + `zsh` for the diagnostic/approval CLIs (optional).
@@ -105,7 +105,7 @@ Open `http://192.168.1.10:8420` on the LAN, enter the API key, and pair. For a r
 
 ## Detailed guides
 
-- **[docs/INSTALL.md](docs/INSTALL.md)** — step-by-step install as a service, with separate instructions for **RHEL & compatibles**, **Debian & compatibles**, **openSUSE/SLES**, **NixOS/Nix**, and **other** distros, including the distro-specific extras that help (SELinux, AppArmor, firewalld/ufw/nftables, declarative NixOS).
+- **[docs/INSTALL.md](docs/INSTALL.md)** — step-by-step install as a service, with separate instructions for **RHEL & compatibles**, **Debian & compatibles**, **openSUSE/SLES**, **NixOS/Nix**, and **other** distros, plus first-class paths for **non-systemd inits** (OpenRC, runit, s6, supervisord, SysV), **non-glibc / musl** systems (Alpine, Void-musl), and the **BSDs / macOS** — including the distro-specific extras that help (SELinux, AppArmor, firewalld/ufw/nftables, declarative NixOS).
 - **[docs/REVERSE-PROXY.md](docs/REVERSE-PROXY.md)** — exposing Breeze Core beyond the LAN: **nginx** and **Apache** configs (separately), **TLS certificates** (Let's Encrypt via certbot and via acme.sh), and the app-side settings that make it safe behind a proxy. For automation, [`deploy/reverse-proxy-wizard.sh`](deploy/reverse-proxy-wizard.sh) generates and installs it (with a `--dry-run`).
 - **[docs/DOCKER.md](docs/DOCKER.md)** — run Breeze Core as a container: a compact, non-root image on Red Hat **UBI 9** (multi-arch, published to GHCR), with a Compose example.
 - **[HARDENING.md](HARDENING.md)** — the security review + public-exposure runbook and go-live checklist.

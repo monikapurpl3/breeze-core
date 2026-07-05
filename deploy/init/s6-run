@@ -1,0 +1,16 @@
+#!/bin/sh
+# Breeze Core — s6 / s6-rc run script.
+# Place as the "run" file of an s6 longrun service directory.
+# Like runit, s6 wants the process in the FOREGROUND (uvicorn is).
+# s6-setuidgid drops to the unprivileged breeze user.
+# No systemd sandbox — see HARDENING.md §7 "Hardening without systemd".
+
+export AC_CONFIG=/etc/breeze-core/config.json
+export AC_DEVICES=/etc/breeze-core/devices.json
+export AC_PROGRAMS=/etc/breeze-core/programs.json
+
+cd /opt/breeze-core || exit 1
+
+# Bind 127.0.0.1 instead of the LAN IP if a reverse proxy fronts it.
+exec s6-setuidgid breeze \
+	./venv/bin/uvicorn meow_ac.app:app --host 192.168.1.10 --port 8420

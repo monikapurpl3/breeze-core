@@ -106,6 +106,8 @@ The unit in [INSTALL.md §5](docs/INSTALL.md#5-install-the-systemd-service) alre
 
 `MemoryDenyWriteExecute=true` is tempting but breaks some CPython builds — test before enabling.
 
+> **Not on systemd?** None of this section applies as-is — OpenRC/runit/s6/supervisord, the BSDs, and macOS have no equivalent of these directives. The egress lockdown especially is the highest-value protection, so don't skip it: **[§7 Hardening without systemd](#7-hardening-without-systemd)** shows how to recover the important parts (privilege drop, filesystem confinement, and an egress firewall) on those platforms.
+
 ---
 
 ## 5. The authentication model & residual risk
@@ -129,10 +131,68 @@ Residual, by design: a **stolen device token** is valid until it expires or is r
 - [ ] Admin endpoints (`enroll/approve`, `devices`) gated to the LAN at the proxy **and** by the app
 - [ ] `AC_BEHIND_PROXY=1`, `AC_TRUSTED_HOSTS` set, `AC_ENROLL_LAN_ONLY=1`, `AC_DOCS` unset (verify `curl …/openapi.json` → 404)
 - [ ] Port 8420 **not** reachable from the LAN/internet (proxy talks to it on loopback)
-- [ ] systemd egress locked to LAN + loopback; `systemd-analyze security` reviewed
+- [ ] Egress locked to LAN + loopback — systemd `IPAddressDeny` (`systemd-analyze security` reviewed) **or**, off systemd, the user-matched firewall rule from [§7](#7-hardening-without-systemd)
+- [ ] Service runs as the unprivileged `breeze` user (not root) — verify `ps -o user= -p <pid>`
 - [ ] fail2ban jails active; filters verified with `fail2ban-regex`
 - [ ] Enrolled a device end-to-end over the public URL, then revoked one and confirmed it stops working
 - [ ] `config.json` / `devices.json` are mode 600, backed up off-box
 - [ ] Consider `AC_TOKEN_TTL_DAYS` lower than the 90-day default
 
 Bots *will* find the hostname (it's published in Certificate Transparency logs) — that's what the jails are for. Check `fail2ban-client status breeze-core-tripwire` after a week for your first catches.
+
+---
+
+## 7. Hardening without systemd
+
+The §4 sandbox is systemd-only. On OpenRC / runit / s6 / supervisord / SysV, the BSDs, or macOS you install Breeze Core the same way (see [INSTALL.md](docs/INSTALL.md)) but must recover the protections yourself. In descending order of importance:
+
+| systemd directive (§4/§5) | What it buys | Non-systemd equivalent |
+|---|---|---|
+| `IPAddressAllow`/`IPAddressDeny` | Compromised process can't phone home | **Firewall egress rule matching the service *user*** (below) — the single most important one |
+| `User=` / `CapabilityBoundingSet=` / `NoNewPrivileges` | No root, no privilege escalation | Run as the unprivileged `breeze` account (all the init templates do); never root; no setuid |
+| `ProtectSystem=strict` / `ReadWritePaths` / `ProtectHome` | Read-only FS except state dir | Tight ownership + a container read-only rootfs or a **FreeBSD jail** / **chroot** |
+| `SystemCallFilter` / `RestrictAddressFamilies` | Kernel-attack-surface reduction | No portable equivalent — a **container** (default seccomp profile) is the practical way to get it |
+| `Restart=on-failure` | Survives crashes | Your supervisor's respawn (`supervise-daemon`, runit, `autorestart=true`, `daemon -r`) |
+
+### The egress lockdown (do this one)
+
+Restrict the **service user's** outbound traffic to loopback + your LAN, so even a fully compromised process can only reach your AC units. Match on the `breeze` UID so the rest of the box is unaffected.
+
+**Linux — nftables** (`/etc/nftables.conf`, or your init's firewall step):
+```nft
+table inet breeze {
+  chain output {
+    type filter hook output priority 0; policy accept;
+    meta skuid "breeze" oif "lo" accept
+    meta skuid "breeze" ip daddr 192.168.0.0/16 accept   # your LAN CIDR
+    meta skuid "breeze" ip6 daddr ::1 accept
+    meta skuid "breeze" drop                              # nothing else leaves
+  }
+}
+```
+**Linux — iptables** (older boxes):
+```sh
+iptables -A OUTPUT -m owner --uid-owner breeze -o lo -j ACCEPT
+iptables -A OUTPUT -m owner --uid-owner breeze -d 192.168.0.0/16 -j ACCEPT
+iptables -A OUTPUT -m owner --uid-owner breeze -j REJECT
+```
+**FreeBSD/macOS — pf** (`/etc/pf.conf`; discovery needs UDP too):
+```pf
+lan = "192.168.0.0/16"
+pass  out on lo0 user breeze
+pass  out proto { tcp udp } from any to $lan user breeze
+block out user breeze                                    # default-deny the rest
+```
+Verify: as the `breeze` user, an outbound connection to a public address should fail while a unit on the LAN still responds.
+
+### Filesystem & privilege
+
+- **Unprivileged user, always.** Every template in [`deploy/init/`](deploy/init/) drops to `breeze` (`command_user` / `chpst -u` / `s6-setuidgid` / `user=` / `--chuid` / `daemon -u`). Confirm with `ps -o user= -p <pid>`.
+- **Least-writable state.** Only `/etc/breeze-core` (or your chosen state dir) needs write access, owned by `breeze`, mode `750`; `config.json` mode `600`. Everything else the process touches should be read-only to it.
+- **Strongest containment:** run it in a **container with a read-only rootfs** (`docker run --read-only --tmpfs /tmp --cap-drop ALL`, only `/etc/breeze-core` writable — see [DOCKER.md](docs/DOCKER.md)) or a **FreeBSD jail**. Either recovers most of what §4 gives you on systemd, on any host.
+
+### Everything else is unchanged
+
+TLS + reverse proxy (§2, REVERSE-PROXY.md), the XFF-overwrite rule, fail2ban (§3), the two-credential auth model (§5), and the app-enforced items in §1 are all init-independent. Only §4 needed translating.
+
+> If you're doing public exposure without systemd, seriously consider the **container** path: it hands you privilege drop, a read-only rootfs, a seccomp profile, and network scoping in one place, and the same image runs everywhere.

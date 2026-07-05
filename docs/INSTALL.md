@@ -2,6 +2,9 @@
 
 This installs Breeze Core as a hardened **systemd service** on a Linux host on the same LAN as your Midea units. It's LAN-only by default; to reach it from outside your network, do this first, then follow [REVERSE-PROXY.md](REVERSE-PROXY.md).
 
+> **Not on systemd? Not on glibc?** The application is the same everywhere — `uvicorn meow_ac.app:app` with a few env vars — only *how you supervise it* and *how you install the Python deps* change. Sections 1–4 (packages, user, venv, pairing) apply to every OS; then jump to your platform instead of section 5:
+> **[non-systemd init](#running-without-systemd-openrc-runit-s6-supervisord-sysv)** (OpenRC / runit / s6 / supervisord / SysV) · **[non-glibc / musl](#non-glibc-musl-libc-systems)** (Alpine, Void-musl) · **[FreeBSD/BSD](#freebsd-and-other-bsds)** · **[macOS](#macos)** · **[NixOS](#nixos-declarative)** · **[Windows/WSL](#windows-testing)**. The one thing only systemd gives you out of the box is the kernel-level sandbox (§5) — [HARDENING.md](../HARDENING.md#7-hardening-without-systemd) shows how to recover the equivalents elsewhere.
+
 The layout we build (all paths are conventions — change them freely, they're wired via env vars):
 
 ```
@@ -98,6 +101,8 @@ sudo ./venv/bin/pip install -r requirements.txt
 ```
 
 > **Air-gapped / offline hosts:** `pip download -r requirements.txt` on an internet-connected machine of the same OS/arch, copy the wheels over, and `pip install --no-index --find-links ./wheels -r requirements.txt`.
+>
+> **Non-glibc (musl) hosts — Alpine, Void-musl, etc.:** pip normally pulls prebuilt **glibc** (manylinux) wheels for the native deps (`pydantic-core`, `cryptography`, `aiohttp`), which **won't load on musl libc**. Recent versions of those deps also publish **musllinux** wheels, so an up-to-date pip usually just works — but if you hit an `ImportError`/`Error loading shared library` or pip starts compiling, you need build tools first. See **[Non-glibc (musl libc) systems](#non-glibc-musl-libc-systems)** below before running the `pip install`.
 
 ---
 
@@ -314,16 +319,151 @@ Replace `lib.fakeSha256` with real hashes (`nix build` will tell you the correct
 
 ---
 
-## Experimental: BSD, macOS, Windows, WSL
+## Running without systemd (OpenRC, runit, s6, supervisord, SysV)
 
-> These run Breeze Core but **lack the systemd sandbox** from section 5. Fine for testing or a trusted LAN; for an internet-facing box prefer a systemd Linux host. Community-tested, not exhaustive. In all cases set `AC_CONFIG` (and optionally `AC_DEVICES`/`AC_PROGRAMS`) to a writable path for that OS — the `/etc/...` default is Linux-specific.
+If your host doesn't run systemd (Alpine, Devuan, Gentoo, Artix, Void, an older SysV box, a container base image…), everything through **section 4 still applies** — install packages, create the `breeze` user, make the venv, pair your units. Only **section 5 changes**: instead of a `.service` unit you register the process with your init/supervisor.
 
-### FreeBSD (and other BSDs)
+Whatever you use, the invariants are the same:
+
+- **Command:** `/opt/breeze-core/venv/bin/uvicorn meow_ac.app:app --host <LAN-IP> --port 8420` (bind `127.0.0.1` if a reverse proxy fronts it).
+- **User:** run as the unprivileged `breeze` account, never root.
+- **Environment:** export `AC_CONFIG` (and, if you split them, `AC_DEVICES`/`AC_PROGRAMS`), pointing at a directory the `breeze` user owns.
+- **Working directory:** the repo root (`/opt/breeze-core`) so the package imports and `static/` resolves.
+- **Restart:** let the supervisor respawn on exit.
+
+> ⚠️ **You do not get the section-5 kernel sandbox** (egress lockdown, `ProtectSystem`, syscall filter). That protection is systemd-specific. Recover the important parts — outbound-egress lockdown, filesystem confinement, privilege drop — with your firewall and OS features as described in **[HARDENING.md §7 “Hardening without systemd”](../HARDENING.md#7-hardening-without-systemd)**. For an internet-facing box, the strongest non-systemd containment is a **container** (see [DOCKER.md](DOCKER.md), `read_only: true`) or a **FreeBSD jail**.
+
+Ready-to-copy templates for each supervisor live in [`deploy/init/`](../deploy/init/). Pick one:
+
+### OpenRC (Alpine, Gentoo, Artix)
+Create the user, then install the service script (from [`deploy/init/openrc-breeze-core`](../deploy/init/openrc-breeze-core)):
 ```sh
-sudo pkg install python311 py311-pip git
-# then venv + pair + config as in sections 3–4 (e.g. under /usr/local/breeze-core, /usr/local/etc/breeze-core)
+# Alpine uses adduser/addgroup; Gentoo/Artix have useradd like the common steps
+addgroup -S breeze 2>/dev/null; adduser -S -D -H -G breeze -s /sbin/nologin breeze
+install -m 0755 deploy/init/openrc-breeze-core /etc/init.d/breeze-core
+rc-update add breeze-core default
+rc-service breeze-core start
+rc-service breeze-core status
 ```
-Run it via **rc.d** — `/usr/local/etc/rc.d/breeze_core`:
+The script (an `openrc-run` service using `supervise-daemon`, which restarts crashes):
+```sh
+#!/sbin/openrc-run
+name="breeze-core"
+description="Breeze Core - self-hosted Midea AC control"
+: ${BREEZE_HOME:=/opt/breeze-core}
+: ${BREEZE_HOST:=192.168.1.10}
+command="${BREEZE_HOME}/venv/bin/uvicorn"
+command_args="meow_ac.app:app --host ${BREEZE_HOST} --port 8420"
+command_user="breeze:breeze"
+command_background=false
+supervisor="supervise-daemon"
+directory="${BREEZE_HOME}"
+export AC_CONFIG=/etc/breeze-core/config.json
+export AC_DEVICES=/etc/breeze-core/devices.json
+export AC_PROGRAMS=/etc/breeze-core/programs.json
+depend() { need net; after firewall; }
+```
+
+### runit (Void, Artix-runit)
+```sh
+mkdir -p /etc/sv/breeze-core
+install -m 0755 deploy/init/runit-run /etc/sv/breeze-core/run
+ln -s /etc/sv/breeze-core /var/service/     # or /etc/runit/runsvdir/default/
+sv status breeze-core
+```
+`/etc/sv/breeze-core/run` (runit expects the process to stay in the **foreground** — uvicorn already does; `chpst` drops privileges and sets env):
+```sh
+#!/bin/sh
+export AC_CONFIG=/etc/breeze-core/config.json
+export AC_DEVICES=/etc/breeze-core/devices.json
+export AC_PROGRAMS=/etc/breeze-core/programs.json
+cd /opt/breeze-core || exit 1
+exec chpst -u breeze:breeze \
+  ./venv/bin/uvicorn meow_ac.app:app --host 192.168.1.10 --port 8420 2>&1
+```
+(Log with a `log/run` service piping to `svlogd`, or let your logger capture stdout.)
+
+### s6 / s6-rc
+Same shape as runit — a `run` script that stays in the foreground. Use `s6-setuidgid breeze` in place of `chpst -u`:
+```sh
+#!/bin/sh
+cd /opt/breeze-core || exit 1
+export AC_CONFIG=/etc/breeze-core/config.json
+exec s6-setuidgid breeze ./venv/bin/uvicorn meow_ac.app:app --host 192.168.1.10 --port 8420
+```
+
+### supervisord (any OS, incl. containers)
+Add to `/etc/supervisor/conf.d/breeze-core.conf` (template: [`deploy/init/supervisor-breeze-core.conf`](../deploy/init/supervisor-breeze-core.conf)):
+```ini
+[program:breeze-core]
+command=/opt/breeze-core/venv/bin/uvicorn meow_ac.app:app --host 192.168.1.10 --port 8420
+directory=/opt/breeze-core
+user=breeze
+environment=AC_CONFIG="/etc/breeze-core/config.json",AC_DEVICES="/etc/breeze-core/devices.json",AC_PROGRAMS="/etc/breeze-core/programs.json"
+autostart=true
+autorestart=true
+stopsignal=INT
+stdout_logfile=/var/log/breeze-core.log
+redirect_stderr=true
+```
+```sh
+supervisorctl reread && supervisorctl update && supervisorctl status breeze-core
+```
+
+### SysV init (legacy)
+On a true SysV box, wrap the command with `start-stop-daemon` (Debian-family) or `daemon`/`nohup` + a PID file in `/etc/init.d/breeze-core`, running as `--chuid breeze`, then `update-rc.d breeze-core defaults` (or `chkconfig --add`). A ready script is at [`deploy/init/sysv-breeze-core`](../deploy/init/sysv-breeze-core). Prefer OpenRC/runit/supervisord if you have the choice — they handle respawn and logging for you.
+
+**Verify (any init):** `curl -s -o /dev/null -w '%{http_code}\n' -H 'X-API-Key: WRONG' http://192.168.1.10:8420/api/units` → `401`. Then open the firewall (§6) and — because you have no systemd sandbox — read [HARDENING.md §7](../HARDENING.md#7-hardening-without-systemd).
+
+---
+
+## Non-glibc (musl libc) systems
+
+*(Alpine Linux, Void-musl, OpenWrt, other musl distros, and musl-based containers.)*
+
+Breeze Core is pure Python, but three dependencies ship **compiled** extensions — `pydantic-core` (Rust), `cryptography` (Rust/OpenSSL), and `aiohttp` (C). pip installs these as prebuilt **wheels**, and the default wheels are **manylinux** (glibc-linked). On a musl system those either refuse to install or fail at import with `Error loading shared library ... : No such file or directory`.
+
+There are two clean ways to handle it:
+
+### Option A — musllinux wheels (usually automatic)
+Modern releases of all three deps publish **`musllinux`** wheels, which pip ≥ 21.3 selects automatically on a musl host. This is the happy path and needs **no compiler**:
+```sh
+apk add python3 py3-pip git            # Alpine
+python3 -m venv venv
+./venv/bin/pip install --upgrade pip   # make sure pip is recent enough to see musllinux wheels
+./venv/bin/pip install -r requirements.txt
+# sanity check the native bits actually load:
+./venv/bin/python -c "import pydantic_core, cryptography, aiohttp; print('musl wheels OK')"
+```
+If that import line prints `OK`, you're done — continue with pairing (§4) and your init (above).
+
+### Option B — build from source (fallback)
+If pip can't find a musllinux wheel for your arch (older releases, uncommon architectures, or you pin an old version), pip will try to **compile**, which needs a toolchain — including **Rust** for `pydantic-core` and `cryptography`:
+```sh
+# Alpine build dependencies:
+apk add build-base python3-dev libffi-dev openssl-dev cargo rust
+# then the normal install; pip now compiles what it can't download:
+./venv/bin/pip install -r requirements.txt
+```
+Building `cryptography`/`pydantic-core` from source is slow (minutes) and pulls a lot of `-dev` packages. On a **container image** you'd do this in a builder stage and copy only the finished venv out — the same multi-stage pattern the shipped [Dockerfile](../Dockerfile) uses (that one is glibc/UBI 9; a musl build would swap the base to `python:3.12-alpine` and add the `apk` build deps above in the builder stage).
+
+### Option C — distro packages
+Alpine also packages some of these: `apk add py3-cryptography py3-aiohttp` gives you musl-native builds from the distro, and you can create the venv with `--system-site-packages` so pip only needs to fetch the rest. Handy on tiny/slow devices where compiling Rust is painful.
+
+> **Note:** the diagnostic/approval CLIs need `zsh`, `curl`, `jq` (`apk add zsh curl jq`) — same as any distro. And musl gives you **no systemd** either, so you'll use one of the inits above plus [HARDENING.md §7](../HARDENING.md#7-hardening-without-systemd).
+
+---
+
+## FreeBSD and other BSDs
+
+```sh
+sudo pkg install python311 py311-pip git         # optional CLIs: curl jq zsh
+sudo pw useradd breeze -d /nonexistent -s /usr/sbin/nologin -c "Breeze Core"
+# then venv + pair + config as in sections 3–4, e.g. under
+#   /usr/local/breeze-core            (code + venv)
+#   /usr/local/etc/breeze-core        (config.json etc., chown breeze)
+```
+Supervise it with **rc.d** — `/usr/local/etc/rc.d/breeze_core` (template: [`deploy/init/freebsd-rc-breeze_core`](../deploy/init/freebsd-rc-breeze_core)):
 ```sh
 #!/bin/sh
 # PROVIDE: breeze_core
@@ -331,22 +471,29 @@ Run it via **rc.d** — `/usr/local/etc/rc.d/breeze_core`:
 . /etc/rc.subr
 name=breeze_core; rcvar=breeze_core_enable
 : ${breeze_core_enable:=NO}
+: ${breeze_core_host:=192.168.1.10}
 command=/usr/sbin/daemon
+procname=/usr/local/breeze-core/venv/bin/python
 command_args="-f -u breeze -o /var/log/breeze_core.log \
-  /usr/local/breeze-core/venv/bin/uvicorn meow_ac.app:app --host 192.168.1.10 --port 8420"
+  -P /var/run/breeze_core.pid \
+  /usr/local/breeze-core/venv/bin/uvicorn meow_ac.app:app --host ${breeze_core_host} --port 8420"
+breeze_core_env="AC_CONFIG=/usr/local/etc/breeze-core/config.json AC_DEVICES=/usr/local/etc/breeze-core/devices.json AC_PROGRAMS=/usr/local/etc/breeze-core/programs.json"
 load_rc_config $name; run_rc_command "$1"
 ```
 ```sh
 sudo sysrc breeze_core_enable=YES && sudo service breeze_core start
 ```
-Set `AC_CONFIG` in the rc script's environment. Firewall with **pf**. **Extra that helps:** FreeBSD **jails** — run Breeze Core in a thin jail for real isolation in lieu of the systemd sandbox.
+Firewall with **pf** (`pass in on $lan proto tcp to port 8420` and a matching egress `block`). **Strongest isolation:** run the whole thing in a thin **jail** — that gives you the filesystem/network confinement systemd provides on Linux. Other BSDs: NetBSD/OpenBSD use their own `rc.d`/`rcctl`; the command and env vars are identical.
 
-### macOS (home/testing)
+## macOS
+
+Home/testing use (macOS has no systemd sandbox; keep it LAN-only):
 ```sh
 brew install python git
-# venv + pair + config as in sections 3–4; point AC_CONFIG at e.g. ~/Library/Application Support/breeze-core/config.json
+# venv + pair + config as in sections 3–4; put state somewhere writable, e.g.
+#   AC_CONFIG="$HOME/Library/Application Support/breeze-core/config.json"
 ```
-Keep it running with **launchd** — `~/Library/LaunchAgents/com.breeze.core.plist`:
+Keep it running with **launchd** — `~/Library/LaunchAgents/com.breeze.core.plist` (template: [`deploy/init/com.breeze.core.plist`](../deploy/init/com.breeze.core.plist)):
 ```xml
 <plist version="1.0"><dict>
   <key>Label</key><string>com.breeze.core</string>
@@ -354,16 +501,21 @@ Keep it running with **launchd** — `~/Library/LaunchAgents/com.breeze.core.pli
     <string>/opt/breeze-core/venv/bin/uvicorn</string><string>meow_ac.app:app</string>
     <string>--host</string><string>192.168.1.10</string><string>--port</string><string>8420</string>
   </array>
-  <key>EnvironmentVariables</key><dict><key>AC_CONFIG</key><string>/opt/breeze-core/config.json</string></dict>
+  <key>WorkingDirectory</key><string>/opt/breeze-core</string>
+  <key>EnvironmentVariables</key><dict>
+    <key>AC_CONFIG</key><string>/opt/breeze-core/config.json</string>
+  </dict>
   <key>RunAtLoad</key><true/><key>KeepAlive</key><true/>
 </dict></plist>
 ```
 ```sh
 launchctl load ~/Library/LaunchAgents/com.breeze.core.plist
 ```
+Firewall with the built-in Application Firewall or `pf`. For an always-on internet-facing deployment, prefer a Linux/systemd box or a container.
 
-### Windows (testing)
-Breeze Core runs on Windows (it's developed there). Quick run in PowerShell:
+## Windows (testing)
+
+Breeze Core runs on Windows (it's developed there); a first-class Windows service path is coming separately. For now, a quick run in PowerShell:
 ```powershell
 $env:AC_CONFIG="C:\ProgramData\breeze-core\config.json"
 .\venv\Scripts\python.exe setup_device.py                                    # pair
@@ -387,10 +539,4 @@ Follow the [Debian/Ubuntu path](#1b-debian--compatibles) *inside* WSL2, with two
 
 ---
 
-## Non-systemd init (Alpine/OpenRC, etc.)
-
-The app is just `uvicorn meow_ac.app:app`. Wrap it in your init system of choice (an OpenRC service, an s6 run script, a supervisord program) with the same env vars and a dedicated user. You lose the systemd sandbox directives — compensate with your init's isolation features and a strict firewall.
-
----
-
-Next: expose it safely from outside your LAN → **[REVERSE-PROXY.md](REVERSE-PROXY.md)**, and review **[HARDENING.md](../HARDENING.md)**.
+Next: expose it safely from outside your LAN → **[REVERSE-PROXY.md](REVERSE-PROXY.md)**, and review **[HARDENING.md](../HARDENING.md)** — especially **[§7 Hardening without systemd](../HARDENING.md#7-hardening-without-systemd)** if you're not on a systemd host.

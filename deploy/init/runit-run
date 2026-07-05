@@ -1,0 +1,19 @@
+#!/bin/sh
+# Breeze Core — runit run script (Void, Artix-runit).
+# Install:  mkdir -p /etc/sv/breeze-core
+#           install -m 0755 deploy/init/runit-run /etc/sv/breeze-core/run
+#           ln -s /etc/sv/breeze-core /var/service/
+#
+# runit requires the process to stay in the FOREGROUND — uvicorn does.
+# chpst drops to the unprivileged breeze user. No systemd sandbox here:
+# see HARDENING.md §7 "Hardening without systemd".
+
+export AC_CONFIG=/etc/breeze-core/config.json
+export AC_DEVICES=/etc/breeze-core/devices.json
+export AC_PROGRAMS=/etc/breeze-core/programs.json
+
+cd /opt/breeze-core || exit 1
+
+# Bind 127.0.0.1 instead of the LAN IP if a reverse proxy fronts it.
+exec chpst -u breeze:breeze \
+	./venv/bin/uvicorn meow_ac.app:app --host 192.168.1.10 --port 8420 2>&1

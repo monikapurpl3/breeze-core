@@ -1,0 +1,36 @@
+#!/bin/sh
+# Breeze Core — FreeBSD rc.d service.
+# Install:  install -m 0755 deploy/init/freebsd-rc-breeze_core /usr/local/etc/rc.d/breeze_core
+#           sysrc breeze_core_enable=YES && service breeze_core start
+#
+# Strongest isolation on FreeBSD is a thin JAIL (there is no systemd sandbox);
+# see HARDENING.md §7 "Hardening without systemd".
+
+# PROVIDE: breeze_core
+# REQUIRE: NETWORKING
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name=breeze_core
+rcvar=breeze_core_enable
+
+load_rc_config $name
+
+: ${breeze_core_enable:=NO}
+: ${breeze_core_home:=/usr/local/breeze-core}
+: ${breeze_core_host:=192.168.1.10}     # bind 127.0.0.1 behind a reverse proxy
+: ${breeze_core_user:=breeze}
+
+pidfile=/var/run/${name}.pid
+command=/usr/sbin/daemon
+procname=${breeze_core_home}/venv/bin/python
+command_args="-f -u ${breeze_core_user} -o /var/log/${name}.log -P ${pidfile} \
+  ${breeze_core_home}/venv/bin/uvicorn meow_ac.app:app --host ${breeze_core_host} --port 8420"
+
+# Exported into the daemon's environment.
+breeze_core_env="AC_CONFIG=/usr/local/etc/breeze-core/config.json \
+  AC_DEVICES=/usr/local/etc/breeze-core/devices.json \
+  AC_PROGRAMS=/usr/local/etc/breeze-core/programs.json"
+
+run_rc_command "$1"

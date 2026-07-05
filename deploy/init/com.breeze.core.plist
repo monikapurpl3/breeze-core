@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Breeze Core — macOS launchd agent.
+  Install:  cp deploy/init/com.breeze.core.plist ~/Library/LaunchAgents/
+            launchctl load ~/Library/LaunchAgents/com.breeze.core.plist
+  Adjust paths and the --host value for your machine.
+  macOS has no systemd sandbox — keep it LAN-only. See HARDENING.md §7.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.breeze.core</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/breeze-core/venv/bin/uvicorn</string>
+    <string>meow_ac.app:app</string>
+    <string>--host</string><string>192.168.1.10</string>
+    <string>--port</string><string>8420</string>
+  </array>
+  <key>WorkingDirectory</key><string>/opt/breeze-core</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>AC_CONFIG</key><string>/opt/breeze-core/config.json</string>
+    <key>AC_DEVICES</key><string>/opt/breeze-core/devices.json</string>
+    <key>AC_PROGRAMS</key><string>/opt/breeze-core/programs.json</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>/tmp/breeze-core.log</string>
+  <key>StandardErrorPath</key><string>/tmp/breeze-core.log</string>
+</dict>
+</plist>

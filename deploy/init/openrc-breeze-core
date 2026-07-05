@@ -1,0 +1,35 @@
+#!/sbin/openrc-run
+# Breeze Core — OpenRC service (Alpine, Gentoo, Artix).
+# Install:  install -m 0755 deploy/init/openrc-breeze-core /etc/init.d/breeze-core
+#           rc-update add breeze-core default && rc-service breeze-core start
+#
+# You lose the systemd sandbox here — pair this with a strict firewall and
+# see HARDENING.md §7 "Hardening without systemd".
+
+name="breeze-core"
+description="Breeze Core - self-hosted Midea AC control"
+
+# Adjust these two for your layout / LAN IP (bind 127.0.0.1 behind a proxy):
+: ${BREEZE_HOME:=/opt/breeze-core}
+: ${BREEZE_HOST:=192.168.1.10}
+
+command="${BREEZE_HOME}/venv/bin/uvicorn"
+command_args="meow_ac.app:app --host ${BREEZE_HOST} --port 8420"
+command_user="breeze:breeze"
+command_background=false
+directory="${BREEZE_HOME}"
+
+# supervise-daemon restarts the process if it crashes.
+supervisor="supervise-daemon"
+respawn_delay=5
+respawn_max=0
+
+# State directory — must be owned by the breeze user.
+export AC_CONFIG=/etc/breeze-core/config.json
+export AC_DEVICES=/etc/breeze-core/devices.json
+export AC_PROGRAMS=/etc/breeze-core/programs.json
+
+depend() {
+	need net
+	after firewall
+}

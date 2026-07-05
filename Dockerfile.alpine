@@ -1,0 +1,67 @@
+# syntax=docker/dockerfile:1
+#
+# Breeze Core container — musl / Alpine variant, for non-glibc hosts and
+# people who want the smallest possible image. The default, published image
+# is the glibc UBI 9 build (see ./Dockerfile); this one is provided for
+# musl-libc environments and is built the same multi-stage way.
+#
+#   docker build -f Dockerfile.alpine -t breeze-core:alpine .
+#
+# The builder installs a Rust/C toolchain so pip can compile pydantic-core /
+# cryptography if a musllinux wheel isn't available for your arch; the runtime
+# stage carries only the interpreter + the finished venv.
+
+########################  builder  ########################
+FROM python:3.12-alpine AS builder
+
+# Build deps for the native wheels (Rust for pydantic-core & cryptography).
+RUN apk add --no-cache build-base python3-dev libffi-dev openssl-dev cargo rust
+
+WORKDIR /app
+COPY requirements.txt .
+RUN python3 -m venv /opt/venv \
+    && /opt/venv/bin/pip install --no-cache-dir --upgrade pip \
+    && /opt/venv/bin/pip install --no-cache-dir -r requirements.txt \
+    # slim the runtime venv: build tooling and caches aren't needed
+    && /opt/venv/bin/pip uninstall -y pip setuptools wheel 2>/dev/null || true \
+    && find /opt/venv -type d -name '__pycache__' -prune -exec rm -rf {} + \
+    && find /opt/venv -type d -name 'tests' -prune -exec rm -rf {} +
+
+########################  runtime  ########################
+FROM python:3.12-alpine AS runtime
+
+LABEL org.opencontainers.image.title="Breeze Core" \
+      org.opencontainers.image.description="Self-hosted, LAN-first REST API + web panel for controlling Midea air conditioners (musl/Alpine build)." \
+      org.opencontainers.image.source="https://github.com/monikapurpl3/breeze-core" \
+      org.opencontainers.image.licenses="AGPL-3.0-or-later"
+
+# libffi/openssl runtime libs the compiled wheels link against.
+RUN apk add --no-cache libffi openssl \
+    && addgroup -g 0 -S root 2>/dev/null || true \
+    && adduser -S -D -H -u 1001 -G root -s /sbin/nologin breeze \
+    && mkdir -p /etc/breeze-core \
+    && chown -R 1001:0 /etc/breeze-core && chmod -R g=u /etc/breeze-core
+
+COPY --from=builder /opt/venv /opt/venv
+
+WORKDIR /app
+COPY meow_ac ./meow_ac
+COPY static ./static
+COPY setup_device.py requirements.txt ./
+
+ENV PATH="/opt/venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    AC_CONFIG=/etc/breeze-core/config.json \
+    AC_DEVICES=/etc/breeze-core/devices.json \
+    AC_PROGRAMS=/etc/breeze-core/programs.json
+
+VOLUME ["/etc/breeze-core"]
+EXPOSE 8420
+USER 1001
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD ["python3","-c","import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8420/',timeout=3).status==200 else 1)"]
+
+# Binds 0.0.0.0 *inside the container* (isolated). Front it with a reverse
+# proxy for public exposure — see docs/DOCKER.md and docs/REVERSE-PROXY.md.
+CMD ["uvicorn","meow_ac.app:app","--host","0.0.0.0","--port","8420"]
