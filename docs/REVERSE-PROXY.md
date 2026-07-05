@@ -6,6 +6,8 @@ By default Breeze Core is LAN-only. To reach it from outside your network you pu
 
 This guide covers **nginx** and **Apache** separately, and certificates via **certbot** and **acme.sh**. Pick one web server and one ACME client.
 
+> **On Windows?** Use the guided **Caddy** wizard instead (automatic HTTPS, same hardening — HSTS/headers, LAN-only admin gate, real-client XFF, plus a fail2ban-style IP banner). See [docs/WINDOWS.md sec. 5](WINDOWS.md#5-expose-it-publicly-with-caddy). Caddy also works on Linux/macOS if you prefer it to nginx/Apache.
+
 > **Want it done for you?** [`deploy/reverse-proxy-wizard.sh`](../deploy/reverse-proxy-wizard.sh) generates and installs a hardened nginx *or* Apache vhost (LAN-gated admin endpoints, anti-spoof XFF, rate limiting) and can obtain a certbot cert. Run it with **`--dry-run`** first to preview every file and command it would touch, changing nothing:
 > ```bash
 > ./deploy/reverse-proxy-wizard.sh --server nginx --domain breeze.example.com --cert certbot --email you@example.com --dry-run

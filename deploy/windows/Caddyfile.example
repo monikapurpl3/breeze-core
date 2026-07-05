@@ -1,0 +1,59 @@
+# Hardened Caddyfile for Breeze Core - reference template.
+#
+# caddy-wizard.ps1 renders this for you with real values and registers Caddy as
+# a Windows service; this file is here so you can read/hand-edit it. It also
+# works on Linux/macOS Caddy. Replace the __PLACEHOLDERS__.
+#
+# Why it's shaped this way (see HARDENING.md):
+#  * The app already sends a strict CSP - we set only transport-security headers
+#    here, never a second CSP.
+#  * With NO trusted_proxies set, Caddy overwrites X-Forwarded-For with the real
+#    peer (a forged XFF is dropped), so an outsider can't forge a private "LAN"
+#    client IP - the overwrite HARDENING.md requires. Don't trust public ranges.
+#  * Admin endpoints are 403'd unless the client is on the LAN (defence in depth
+#    with the app's own LAN-only check); the tripwire watches for those 403s.
+
+{
+	email __EMAIL__
+	# Keep certs/keys off the service profile, under ProgramData:
+	storage file_system {
+		root "C:\\ProgramData\\breeze-core\\caddy"
+	}
+}
+
+__DOMAIN__ {
+	encode zstd gzip
+
+	log {
+		output file "C:\\ProgramData\\breeze-core\\logs\\caddy-access.json" {
+			roll_size 10MiB
+			roll_keep 10
+		}
+		format json
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		Cross-Origin-Opener-Policy "same-origin"
+		-Server
+	}
+
+	# LAN-only admin endpoints.
+	@admin path /api/auth/enroll/approve* /api/auth/devices*
+	handle @admin {
+		route {
+			@notlan not remote_ip 192.168.0.0/16 10.0.0.0/8 172.16.0.0/12 127.0.0.1/8
+			respond @notlan 403
+			reverse_proxy 127.0.0.1:8420 {
+				header_up X-Real-IP {remote_host}
+			}
+		}
+	}
+
+	reverse_proxy 127.0.0.1:8420 {
+		header_up X-Real-IP {remote_host}
+	}
+}

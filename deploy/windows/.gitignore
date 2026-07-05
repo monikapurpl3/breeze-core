@@ -1,0 +1,6 @@
+# Bundled third-party binaries fetched by fetch-vendor.ps1 (not committed).
+vendor/
+# Installer build output.
+*.exe
+build/
+payload/

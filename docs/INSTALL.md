@@ -3,7 +3,7 @@
 This installs Breeze Core as a hardened **systemd service** on a Linux host on the same LAN as your Midea units. It's LAN-only by default; to reach it from outside your network, do this first, then follow [REVERSE-PROXY.md](REVERSE-PROXY.md).
 
 > **Not on systemd? Not on glibc?** The application is the same everywhere — `uvicorn meow_ac.app:app` with a few env vars — only *how you supervise it* and *how you install the Python deps* change. Sections 1–4 (packages, user, venv, pairing) apply to every OS; then jump to your platform instead of section 5:
-> **[non-systemd init](#running-without-systemd-openrc-runit-s6-supervisord-sysv)** (OpenRC / runit / s6 / supervisord / SysV) · **[non-glibc / musl](#non-glibc-musl-libc-systems)** (Alpine, Void-musl) · **[FreeBSD/BSD](#freebsd-and-other-bsds)** · **[macOS](#macos)** · **[NixOS](#nixos-declarative)** · **[Windows/WSL](#windows-testing)**. The one thing only systemd gives you out of the box is the kernel-level sandbox (§5) — [HARDENING.md](../HARDENING.md#7-hardening-without-systemd) shows how to recover the equivalents elsewhere.
+> **[non-systemd init](#running-without-systemd-openrc-runit-s6-supervisord-sysv)** (OpenRC / runit / s6 / supervisord / SysV) · **[non-glibc / musl](#non-glibc-musl-libc-systems)** (Alpine, Void-musl) · **[FreeBSD/BSD](#freebsd-and-other-bsds)** · **[macOS](#macos)** · **[NixOS](#nixos-declarative)** · **[Windows](WINDOWS.md)** / **[WSL](#wsl-windows-subsystem-for-linux)**. The one thing only systemd gives you out of the box is the kernel-level sandbox (§5) — [HARDENING.md](../HARDENING.md#7-hardening-without-systemd) shows how to recover the equivalents elsewhere.
 
 The layout we build (all paths are conventions — change them freely, they're wired via env vars):
 
@@ -513,20 +513,22 @@ launchctl load ~/Library/LaunchAgents/com.breeze.core.plist
 ```
 Firewall with the built-in Application Firewall or `pf`. For an always-on internet-facing deployment, prefer a Linux/systemd box or a container.
 
-## Windows (testing)
+## Windows
 
-Breeze Core runs on Windows (it's developed there); a first-class Windows service path is coming separately. For now, a quick run in PowerShell:
+Windows is a **first-class** target: a guided **NSIS installer** sets Breeze
+Core up as a hardened Windows **service** (bundled NSSM, low-privilege
+`LOCAL SERVICE`, LAN-locked firewall), with an optional guided **Caddy** reverse
+proxy (auto-HTTPS) and a **fail2ban-style** IP banner. The full guide is
+**[docs/WINDOWS.md](WINDOWS.md)** — start there.
+
+Quick testing run (no service), in PowerShell from the repo root:
 ```powershell
 $env:AC_CONFIG="C:\ProgramData\breeze-core\config.json"
 .\venv\Scripts\python.exe setup_device.py                                    # pair
 .\venv\Scripts\uvicorn.exe meow_ac.app:app --host 192.168.1.10 --port 8420
 ```
-For a background service use **NSSM** (`nssm install BreezeCore …\venv\Scripts\uvicorn.exe`, set `AC_CONFIG` in the service env) or a Task Scheduler "at startup" task. Open the LAN port:
-```powershell
-New-NetFirewallRule -DisplayName "Breeze Core" -Direction Inbound -Protocol TCP `
-  -LocalPort 8420 -RemoteAddress 192.168.0.0/16 -Action Allow
-```
-No sandbox — run under a low-privilege account, keep it LAN-only, and prefer WSL/Linux for anything real.
+For anything persistent, use the installer or the scripts in
+[`deploy/windows/`](../deploy/windows/) — see [WINDOWS.md](WINDOWS.md).
 
 ### WSL (Windows Subsystem for Linux)
 Follow the [Debian/Ubuntu path](#1b-debian--compatibles) *inside* WSL2, with two caveats:

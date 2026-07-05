@@ -196,3 +196,14 @@ Verify: as the `breeze` user, an outbound connection to a public address should 
 TLS + reverse proxy (§2, REVERSE-PROXY.md), the XFF-overwrite rule, fail2ban (§3), the two-credential auth model (§5), and the app-enforced items in §1 are all init-independent. Only §4 needed translating.
 
 > If you're doing public exposure without systemd, seriously consider the **container** path: it hands you privilege drop, a read-only rootfs, a seccomp profile, and network scoping in one place, and the same image runs everywhere.
+
+### Windows
+
+Windows is its own non-systemd case with a complete runbook in
+[docs/WINDOWS.md](docs/WINDOWS.md); the mapping to this document:
+
+- **Privilege drop** — the `BreezeCore` service runs as `LOCAL SERVICE`; state in `%ProgramData%\breeze-core` has inheritance stripped and is granted only to SYSTEM/Administrators/LocalService (the `chmod 600`/`750` analogue).
+- **TLS + headers + XFF overwrite (§2, §8)** — the bundled **Caddy** wizard does auto-HTTPS + HSTS/headers. Caddy needs *no* explicit XFF rule: with no `trusted_proxies` configured it drops a client-sent `X-Forwarded-For` and substitutes the real peer (verified), which *is* the overwrite. Never add public ranges to `trusted_proxies`.
+- **fail2ban (§3)** — the `BreezeTripwire` watcher tails Caddy's access log and bans IPs via Windows Firewall (general 4xx/5xx flood + instant admin-`403` tripwire; LAN never banned; bans expire). It must manage the firewall, so it — and only it — runs as LocalSystem.
+- **Egress lockdown (§4 item 10)** — the weak spot. Windows Firewall can't cleanly default-deny per-app egress; `install-service.ps1 -LockEgress` adds a best-effort "block this binary to `Internet`" rule, but classification is profile-dependent. For strict egress, run the container image or a systemd Linux host instead.
+- **Syscall filter / seccomp** — no equivalent; use the container image if you need it.
