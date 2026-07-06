@@ -66,20 +66,18 @@ class ConfigStore:
     def ensure_ready(self) -> AppConfig:
         """Load and assert the config is usable for serving requests.
 
-        Mirrors the original `_ensure_loaded` checks so behavior is
-        unchanged: a config with no api_key or no units is a
-        misconfiguration, surfaced with instructions rather than a
-        confusing downstream error.
+        Requires an `api_key` (a config without one is unconfigured —
+        surfaced with setup guidance rather than a confusing downstream
+        error). An **empty unit list is allowed**: it's a legitimate
+        runtime state now that units can be removed via
+        `DELETE /api/units/{id}`, and the routes return empty results /
+        404s for it rather than the whole API 500-ing on every call.
         """
         config = self.config
         if not config.api_key:
             raise RuntimeError(
                 f"{self.path} has no api_key. Re-run setup_device.py to "
                 "generate one (it preserves your existing units)."
-            )
-        if not config.units:
-            raise RuntimeError(
-                f"{self.path} has no units. Run setup_device.py to (re)discover."
             )
         return config
 
@@ -136,6 +134,14 @@ class ConfigStore:
             if unit.unit_id == unit_id:
                 return unit
         return None
+
+    def remove_unit(self, unit_id: str) -> bool:
+        """Drop a unit from the config by id. Returns True if one was
+        removed. Does not persist on its own — call `save()` afterward."""
+        config = self.config
+        before = len(config.units)
+        config.units = [u for u in config.units if u.unit_id != unit_id]
+        return len(config.units) != before
 
     # -- writing -------------------------------------------------------
 

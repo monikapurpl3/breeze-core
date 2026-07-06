@@ -171,7 +171,7 @@ Rotating the `api_key` doesn't log devices out (tokens are independent); revoke 
 
 ## REST API reference
 
-Base URL: `http://<host>:8420` (or your HTTPS proxy URL). All comparisons are constant-time.
+Base URL: `http://<host>:8420` (or your HTTPS proxy URL). All comparisons are constant-time. Responses are compressed with **brotli** (gzip fallback) when the client sends `Accept-Encoding` — disable with `AC_COMPRESSION=0`.
 
 ### Pairing — `/api/auth`
 ```
@@ -182,15 +182,25 @@ GET  /api/auth/devices          X-API-Key + LAN → [{token_id, label, created_a
 DELETE /api/auth/devices/{id}   X-API-Key + LAN → 204                                   (admin)
 ```
 
+### Meta — `/api` (health is public; version needs the API key)
+```
+GET   /api/health               → {status:"ok"}                 (public liveness probe)
+GET   /api/version   X-API-Key  → {name, version, features[], units}   (feature-detect)
+```
+
 ### Units — `/api/units` (require API key **+** device token)
 ```
-GET   /api/units                → [{id, name, ip}]
-GET   /api/units/{id}/state     → full state (connects + refreshes the unit)
-POST  /api/units/{id}/control   → full state (applies only the fields present)
-PATCH /api/units/{id}           → rename a unit (body {name}) → sanitized unit view
-POST  /api/units                → add a unit by LAN IP (body {ip, name?}); discovers
+GET    /api/units               → [{id, name, ip}]
+GET    /api/units/state         → {states:[…], errors:[{id,name,ip,detail}]}  (all units,
+                                   fanned out concurrently; unreachable units → online:false
+                                   in states, or in errors — never 503s the whole batch)
+GET    /api/units/{id}/state    → full state (connects + refreshes the unit)
+POST   /api/units/{id}/control  → full state (applies only the fields present)
+PATCH  /api/units/{id}          → rename a unit (body {name}) → sanitized unit view
+POST   /api/units               → add a unit by LAN IP (body {ip, name?}); discovers
                                    it and writes config.json → 201 sanitized unit view
-GET   /api/config               → sanitized config: [{id,name,ip,port,has_v3_credentials}]
+DELETE /api/units/{id}          → remove a unit from config → 204
+GET    /api/config              → sanitized config: [{id,name,ip,port,has_v3_credentials}]
                                    (never returns the api_key or V3 token/key secrets)
 ```
 State object:

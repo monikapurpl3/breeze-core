@@ -26,6 +26,8 @@ This is the security review and go-live runbook for taking Breeze Core off the L
 
 Items marked ✅ are on by default in the app. ⚙️ items are the deploy-time work in the two guides.
 
+> **New in 2.4.0 — kept safe by design:** `GET /api/health` is the one unauthenticated route; it returns only `{"status":"ok"}` (no version, no counts) so it leaks nothing to anonymous callers. `GET /api/version` (which does report the build + feature list) sits behind the API key, same reasoning as keeping `/docs` off. **Response compression** (brotli/gzip) is on by default — safe because responses carry no secrets (the config view is sanitized; tokens are never returned), so BREACH doesn't apply; set `AC_COMPRESSION=0` if your proxy compresses instead.
+
 ---
 
 ## 2. Application settings for public exposure

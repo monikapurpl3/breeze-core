@@ -57,6 +57,12 @@ class Settings:
     # sets them instead, to avoid duplicates.
     security_headers: bool = True
 
+    # Compress responses (brotli when the client supports it, gzip
+    # otherwise). Safe here — responses never contain secrets (the config
+    # view is sanitized; tokens are never returned), so BREACH doesn't
+    # apply. AC_COMPRESSION=0 to disable (e.g. if the proxy compresses).
+    compression: bool = True
+
     # Host allowlist for TrustedHostMiddleware. None = allow any (dev);
     # set AC_TRUSTED_HOSTS="breeze.example.com,127.0.0.1" in production.
     trusted_hosts: Optional[List[str]] = None
@@ -96,6 +102,7 @@ class Settings:
             scheduler_tick_seconds=_env_int("AC_SCHED_TICK", 30),
             docs_enabled=_env_bool("AC_DOCS", False),
             security_headers=_env_bool("AC_SECURITY_HEADERS", True),
+            compression=_env_bool("AC_COMPRESSION", True),
             trusted_hosts=trusted_hosts,
             behind_proxy=_env_bool("AC_BEHIND_PROXY", False),
             enrollment_lan_only=_env_bool("AC_ENROLL_LAN_ONLY", True),

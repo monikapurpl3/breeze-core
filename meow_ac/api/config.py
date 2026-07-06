@@ -99,4 +99,15 @@ def build_config_router(
         log.info("unit added/updated via IP %s: %s (%s)", req.ip, unit.name, unit.unit_id)
         return _unit_view(unit)
 
+    @router.delete("/units/{unit_id}", status_code=204)
+    async def delete_unit(unit_id: str):
+        """Remove a unit from config. Drops its cached connection too."""
+        if store.find_unit(unit_id) is None:
+            raise HTTPException(404, f"Unknown unit '{unit_id}'")
+        store.remove_unit(unit_id)
+        store.save()
+        manager.forget(unit_id)
+        log.info("unit %s removed", unit_id)
+        # 204 No Content — return nothing.
+
     return router

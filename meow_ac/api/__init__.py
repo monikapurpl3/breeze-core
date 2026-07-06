@@ -2,6 +2,7 @@
 
 from meow_ac.api.auth import build_auth_router
 from meow_ac.api.config import build_config_router
+from meow_ac.api.meta import build_meta_router
 from meow_ac.api.programs import build_programs_router
 from meow_ac.api.units import build_router
 
@@ -10,4 +11,5 @@ __all__ = [
     "build_auth_router",
     "build_programs_router",
     "build_config_router",
+    "build_meta_router",
 ]

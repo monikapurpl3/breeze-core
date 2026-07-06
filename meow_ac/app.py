@@ -36,6 +36,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from meow_ac.api import auth as auth_api
 from meow_ac.api import config as config_api
+from meow_ac.api import meta as meta_api
 from meow_ac.api import programs as programs_api
 from meow_ac.api import units as units_api
 from meow_ac.config.store import ConfigStore
@@ -109,6 +110,24 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
 
     # Middleware is added inner-first; TrustedHost is added last so it runs
     # first and rejects spoofed Host headers before anything else.
+    #
+    # Compression is innermost (added first) so it compresses the body the
+    # app produces; brotli when the client advertises `br`, gzip otherwise
+    # (gzip_fallback). Safe because responses carry no secrets, so BREACH
+    # doesn't apply; minimum_size skips tiny payloads. Falls back to
+    # gzip-only if brotli-asgi isn't installed.
+    if settings.compression:
+        try:
+            from brotli_asgi import BrotliMiddleware
+
+            app.add_middleware(
+                BrotliMiddleware, quality=5, minimum_size=512, gzip_fallback=True
+            )
+        except Exception:
+            from starlette.middleware.gzip import GZipMiddleware
+
+            log.warning("brotli-asgi unavailable; using gzip-only compression")
+            app.add_middleware(GZipMiddleware, minimum_size=512)
     if settings.security_headers:
         app.add_middleware(SecurityHeadersMiddleware)
     if settings.trusted_hosts:
@@ -120,6 +139,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     # JavaScript call this API too. If the service is ever exposed to a
     # separate front-end origin, add CORS with an explicit, narrow origin
     # allowlist — never a wildcard.
+    app.include_router(meta_api.build_meta_router(api_key_auth, manager))
     app.include_router(
         auth_api.build_auth_router(token_store, enrollment, settings, api_key_auth)
     )

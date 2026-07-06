@@ -11,7 +11,17 @@ docker pull ghcr.io/monikapurpl3/breeze-core:latest
 docker build -t breeze-core .
 ```
 
+### Image variants
+
+| Tag | Base | For |
+|---|---|---|
+| `:latest`, `:vX.Y.Z` | UBI 9 (glibc), **amd64 + arm64** | Everyone — the default. |
+| `:vX.Y.Z-x86-64-v2` | UBI 9 (glibc), amd64 | Broadly-compatible microarch build (SSE4.2/POPCNT). |
+| `:vX.Y.Z-x86-64-v3` | UBI 9 (glibc), amd64 | Modern-CPU microarch build (**AVX2/BMI2/FMA**). |
+
 > **glibc vs musl.** The published image is glibc (UBI 9), which covers virtually all hosts. If you specifically need a **musl / Alpine** image (non-glibc base, smallest size), build the provided variant: `docker build -f Dockerfile.alpine -t breeze-core:alpine .`. Its builder stage carries a Rust/C toolchain so it compiles the native wheels when no musllinux wheel exists — see [INSTALL.md → Non-glibc (musl libc) systems](INSTALL.md#non-glibc-musl-libc-systems).
+
+> **x86-64 microarchitecture variants (`-x86-64-v2` / `-x86-64-v3`).** These compile **every** dependency from source (`pip --no-binary :all:`) with `-march`/`target-cpu` set, so the native extensions (pydantic-core, cryptography, aiohttp, …) use newer instruction sets. `v2` runs on essentially any x86-64 CPU; **`v3` requires AVX2** (Haswell/Excavator or newer) and will `SIGILL` on older CPUs — match the level to your host (`cat /sys/devices/cpu/caps/…` or just try). The workload is LAN-I/O-bound, so gains are modest; use these only if you want them. Build locally with `docker build -f Dockerfile.march --build-arg MARCH=x86-64-v3 -t breeze-core:v3 .`. **arm64 users:** stick with `:latest`.
 
 ## The networking question (read this)
 

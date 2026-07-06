@@ -1,3 +1,4 @@
 fastapi>=0.110
 uvicorn[standard]>=0.29
 msmart-ng>=2026.4.1
+brotli-asgi>=1.4  # response compression (brotli, gzip fallback)
