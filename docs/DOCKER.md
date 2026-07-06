@@ -2,18 +2,6 @@
 
 A compact, non-root container built on Red Hat **UBI 9 minimal** (free & redistributable, glibc, security-patched). Image: `ghcr.io/monikapurpl3/breeze-core`.
 
-## Why UBI 9 (and not Debian / Alpine / "distroless")?
-
-The base image was a deliberate choice; the short version is **security patching + stability + a clean license, with glibc**:
-
-- **Enterprise-grade, no-cost security maintenance.** UBI is the same RPM stream as RHEL, patched by Red Hat's product-security team with published CVE errata and a long support lifecycle (RHEL 9 into the 2030s). You inherit that patch cadence for the OS layer without a subscription — UBI is [freely redistributable](https://www.redhat.com/en/blog/introducing-red-hat-universal-base-image). Debian's security is solid and community-run; the difference is the formal errata/lifecycle guarantees, which matter for a thing you expose to the internet.
-- **Stability.** A RHEL-pinned userland barely moves within a major version — the same reason it's a boring, dependable server base. Fewer surprise ABI/toolchain shifts between rebuilds than a fast-moving base.
-- **glibc, so wheels "just work".** Python's prebuilt **manylinux** wheels (pydantic-core, cryptography, aiohttp…) target glibc. UBI is glibc, so the default image installs binary wheels with no compiler. That's also why the **Alpine** variant is opt-in only — musl needs musllinux wheels or a from-source build (see the Alpine note below).
-- **Clean licensing.** UBI's terms explicitly allow redistribution of derived images, so publishing to a public registry is unambiguous.
-- **Rootless / OpenShift-friendly.** The image runs as a non-root UID in group 0 with a group-writable state dir — the UBI convention for arbitrary-UID platforms.
-
-Trade-offs, honestly: UBI minimal (~15 MB larger than Alpine) isn't the tiniest option, and it's a Red Hat ecosystem base rather than a community one. If you specifically want musl/smallest, build the [Alpine variant](#image-variants); if you want a different distro entirely, the app is plain Python + `uvicorn meow_ac.app:app` and will run on any base you like.
-
 ## Get the image
 
 ```bash
@@ -89,4 +77,16 @@ See [REVERSE-PROXY.md](REVERSE-PROXY.md) and [HARDENING.md](../HARDENING.md).
 - **Secrets:** the `.dockerignore` keeps `config.json`/`devices.json`/`programs.json` out of the image; they live only in the volume.
 - **Read-only rootfs:** supported — add `read_only: true` and `tmpfs: /tmp` in compose; only `/etc/breeze-core` needs to be writable.
 - **Updates:** `docker compose pull && docker compose up -d`. Data persists in the volume.
-- **GHCR visibility:** the first publish creates a *private* package. Make it public in the repo's package settings if you want others to pull without auth.
+
+
+## Why UBI 9 (and not Debian / Alpine / "distroless")?
+
+The base image was a deliberate choice; the short version is **security patching + stability + a clean license, with glibc**:
+
+- **Enterprise-grade, no-cost security maintenance.** UBI is the same RPM stream as RHEL, patched by Red Hat's product-security team with published CVE errata and a long support lifecycle (RHEL 9 into the 2030s). You inherit that patch cadence for the OS layer without a subscription — UBI is [freely redistributable](https://www.redhat.com/en/blog/introducing-red-hat-universal-base-image). Debian's security is solid and community-run; the difference is the formal errata/lifecycle guarantees, which matter for a thing you expose to the internet.
+- **Stability.** A RHEL-pinned userland barely moves within a major version — the same reason it's a boring, dependable server base. Fewer surprise ABI/toolchain shifts between rebuilds than a fast-moving base.
+- **glibc, so wheels "just work".** Python's prebuilt **manylinux** wheels (pydantic-core, cryptography, aiohttp…) target glibc. UBI is glibc, so the default image installs binary wheels with no compiler. That's also why the **Alpine** variant is opt-in only — musl needs musllinux wheels or a from-source build (see the Alpine note below).
+- **Clean licensing.** UBI's terms explicitly allow redistribution of derived images, so publishing to a public registry is unambiguous.
+- **Rootless / OpenShift-friendly.** The image runs as a non-root UID in group 0 with a group-writable state dir — the UBI convention for arbitrary-UID platforms.
+
+Trade-offs, honestly: UBI minimal (~15 MB larger than Alpine) isn't the tiniest option, and it's a Red Hat ecosystem base rather than a community one. If you specifically want musl/smallest, build the [Alpine variant](#image-variants); if you want a different distro entirely, the app is plain Python + `uvicorn meow_ac.app:app` and will run on any base you like.
