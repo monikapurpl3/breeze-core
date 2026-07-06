@@ -69,22 +69,31 @@ async def main(ip, out_path: Path, interactive_names: bool):
     store.save()
     units = store.config.units
 
+    # Redacted summary — never echo the api_key or per-unit V3 token/key to the
+    # terminal (they'd linger in scrollback / CI logs). Show only safe fields.
+    summary = [
+        {"id": u.unit_id, "name": u.name, "ip": u.ip, "port": u.port,
+         "has_v3_credentials": bool(u.token and u.key)}
+        for u in units
+    ]
     print(f"\nThis run found {found_count} unit(s). Config now has {len(units)} total at {out_path}:")
-    print(json.dumps([u.model_dump() for u in units], indent=2))
+    print(json.dumps(summary, indent=2))
 
     if is_new_key:
+        # Deliberately do NOT print the key itself. It's written to config.json
+        # (mode 600); read it from there when a client first asks for it, e.g.
+        #   python -c "import json;print(json.load(open('config.json'))['api_key'])"
         print(
-            f"\nGenerated a new API key — the web UI will ask for this the "
-            f"first time you open it on each browser/device:\n\n    {store.config.api_key}\n\n"
-            "It's stored in this same config.json (mode 600). Anyone who "
-            "has it can control these units over the LAN, so don't paste "
-            "it anywhere public."
+            f"\nGenerated a new API key and stored it in {out_path} (mode 600). "
+            "The web UI / app asks for it the first time you connect on each "
+            "device. Read it from that file when you need it — anyone who has "
+            "it can control these units over the LAN, so keep it off anywhere public."
         )
 
     if any(u.token and u.key for u in units):
         print(
             "\nAt least one of these is a V3 device — keep its token/key "
-            "safe somewhere outside of meow too, in case the Midea cloud "
+            "safe somewhere off this box too, in case the Midea cloud "
             "ever goes down."
         )
 

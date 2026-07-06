@@ -38,6 +38,25 @@ body{
   font-size: 13px;
   color: var(--muted);
 }
+.header-actions{
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ghost-btn{
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.ghost-btn:hover{ border-color: #4fd1c5; }
+.ghost-btn:active{ transform: scale(0.97); }
 
 .grid{
   max-width: 1100px;
@@ -88,6 +107,47 @@ body{
   font-size: 12px;
   color: var(--muted);
 }
+
+/* --- per-unit ⋮ menu --- */
+.unit-menu{ position: relative; }
+.menu-btn{
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.menu-btn:hover{ color: var(--text); background: var(--surface-2); }
+.menu{
+  position: absolute;
+  right: 0;
+  top: 26px;
+  z-index: 20;
+  min-width: 150px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 4px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+.menu button{
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12px;
+  cursor: pointer;
+}
+.menu button:hover{ background: var(--surface); }
+.menu button[data-role="removeBtn"]{ color: var(--bad); }
 .dot{
   width:7px; height:7px; border-radius:50%;
   background: var(--bad);
@@ -288,6 +348,30 @@ body{
   cursor: pointer;
 }
 .enroll-btn:disabled{ opacity: 0.5; cursor: default; }
+.enroll-btn.secondary{
+  border-color: var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+}
+.enroll-btn.danger{
+  border-color: var(--bad);
+  background: var(--bad);
+  color: #fff;
+}
+.btn-row{
+  display: flex;
+  gap: 10px;
+  margin-top: 6px;
+}
+.btn-row .enroll-btn{ flex: 1; }
+.empty-state code{
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 1px 6px;
+  font-size: 12px;
+}
+.empty-state .ghost-btn{ margin-top: 14px; }
 .enroll-code{
   font-size: 34px;
   font-weight: 700;

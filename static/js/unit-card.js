@@ -8,12 +8,14 @@
 // and vice versa.
 
 import { nextSwingMode } from "./swing.js";
+import { fmtTemp } from "./display.js";
 
 const DIAL_CIRC = 2 * Math.PI * 78;
 
-// buildPanel(unit, control) -> panel object { root, refs, id, state, pending }
+// buildPanel(unit, control, actions) -> panel object { root, refs, id, state, pending }
 // `control` is the callback invoked as control(panel, body) on any input.
-export function buildPanel(unit, control){
+// `actions` = { onRename(panel), onRemove(panel) } wires the ⋮ menu.
+export function buildPanel(unit, control, actions = {}){
   const tpl = document.getElementById("panelTemplate");
   const node = tpl.content.firstElementChild.cloneNode(true);
 
@@ -63,7 +65,29 @@ export function buildPanel(unit, control){
     pill.addEventListener("click", () => control(p, {fan_speed: Number(pill.dataset.fan)}));
   });
 
+  // ⋮ menu: rename / remove. The menu closes on outside click or Escape.
+  if(refs.menuBtn && refs.menu){
+    const closeMenu = () => refs.menu.classList.add("hidden");
+    refs.menuBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      refs.menu.classList.toggle("hidden");
+    });
+    document.addEventListener("click", closeMenu);
+    document.addEventListener("keydown", (e) => { if(e.key === "Escape") closeMenu(); });
+    if(refs.renameBtn){
+      refs.renameBtn.addEventListener("click", () => { closeMenu(); actions.onRename && actions.onRename(p); });
+    }
+    if(refs.removeBtn){
+      refs.removeBtn.addEventListener("click", () => { closeMenu(); actions.onRemove && actions.onRemove(p); });
+    }
+  }
+
   return p;
+}
+
+// Update the displayed unit name (after a rename).
+export function setName(p, name){
+  p.refs.name.textContent = name;
 }
 
 export function setError(p, msg){
@@ -80,9 +104,9 @@ export function render(p, s){
   r.dot.className = "dot" + (s.online ? " online" : "");
   r.statusText.textContent = s.online ? "online" : "offline";
 
-  r.indoorTemp.textContent = (s.indoor_temperature ?? "--") + "°";
-  r.targetReadout.textContent = s.target_temperature + "°";
-  r.targetBig.textContent = s.target_temperature + "°";
+  r.indoorTemp.textContent = fmtTemp(s.indoor_temperature, {showUnit: false});
+  r.targetReadout.textContent = fmtTemp(s.target_temperature, {showUnit: false});
+  r.targetBig.textContent = fmtTemp(s.target_temperature, {showUnit: false});
 
   const lo = 16, hi = 30;
   const frac = Math.min(1, Math.max(0, (s.target_temperature - lo) / (hi - lo)));
