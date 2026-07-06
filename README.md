@@ -11,9 +11,9 @@ Built on [msmart-ng](https://github.com/mill1000/midea-msmart) (device I/O), [Fa
 ## Contents
 
 - [What you get](#what-you-get)
+- [Get started](#get-started)
 - [Architecture](#architecture)
 - [Requirements](#requirements)
-- [Quickstart](#quickstart)
 - [Detailed guides](#detailed-guides)
 - [Configuration](#configuration)
 - [Authentication (device pairing)](#authentication-device-pairing)
@@ -40,6 +40,76 @@ Four decoupled components that share exactly one contract — the `/api/*` endpo
 | **Breeze (Android)** | *separate repo* | Optional native app — mirrors the web UI plus programs, diagnostics, and server switching. See the [**breeze**](https://github.com/monikapurpl3/breeze) repository. |
 
 Delete any client and the API and the others keep working.
+
+---
+
+## Get started
+
+New here? Pick how you want to run it. **Every path ends the same way: open the web page it gives you, type the access key it printed, and you're controlling your AC.** No cloud account, nothing leaves your home network.
+
+**Before you start:** your Midea unit should already be on your Wi-Fi (you do that once with the *NetHome Plus* phone app). Then pick one:
+
+### 🐳 Docker — easiest, any operating system
+
+If you have Docker, this is the least fuss — two commands:
+
+```bash
+# 1. find your AC units and pair (this prints an access key once — copy it)
+docker run --rm -it --network host -v breeze:/etc/breeze-core \
+  ghcr.io/monikapurpl3/breeze-core:latest python setup_device.py
+
+# 2. leave it running
+docker run -d --name breeze --restart unless-stopped --network host \
+  -v breeze:/etc/breeze-core ghcr.io/monikapurpl3/breeze-core:latest
+```
+
+Then open **`http://<this-computer's-IP>:8420`** in a browser. Compose file, updates, and options → [docs/DOCKER.md](docs/DOCKER.md).
+
+### 🪟 Windows — just double-click an installer
+
+Download **`Breeze-Core-Setup.exe`** from the [latest release](https://github.com/monikapurpl3/breeze-core/releases/latest) and run it. It sets Breeze Core up as a background service and offers to find your units for you — no commands to type. Full walkthrough → [docs/WINDOWS.md](docs/WINDOWS.md).
+
+### 🐧 Linux — three short steps
+
+First, a one-time install of Python using your system's line:
+
+| Your system | One-time setup |
+|---|---|
+| Fedora · RHEL · AlmaLinux · Rocky | `sudo dnf install -y python3 python3-pip git` |
+| Debian · Ubuntu · Raspberry Pi OS · Mint | `sudo apt install -y python3 python3-venv python3-pip git` |
+| openSUSE · SLES | `sudo zypper install -y python3 python3-pip git` |
+| Arch · Manjaro | `sudo pacman -S --needed python git` |
+| Alpine | `sudo apk add python3 py3-pip git` |
+| NixOS | it's declarative — use the recipe in [the install guide](docs/INSTALL.md#nixos-declarative) |
+
+Then, in a folder of your choice:
+
+```bash
+git clone https://github.com/monikapurpl3/breeze-core && cd breeze-core
+python3 -m venv venv && ./venv/bin/pip install -r requirements.txt
+./venv/bin/python setup_device.py                              # finds units, prints the key once
+./venv/bin/uvicorn meow_ac.app:app --host 0.0.0.0 --port 8420  # start it
+```
+
+Open **`http://<this-computer's-IP>:8420`**. To have it start automatically on every boot (recommended), the [install guide](docs/INSTALL.md) turns this into a proper always-on service in a few more minutes — with exact steps per distro, including systems without systemd.
+
+### 🍎 macOS
+
+```bash
+brew install python git
+```
+
+…then the same three commands as Linux above. To keep it running in the background, see [the install guide → macOS](docs/INSTALL.md#macos).
+
+### 😈 FreeBSD / other BSD
+
+```sh
+sudo pkg install python311 py311-pip git
+```
+
+…then the same three commands, and run it under `rc.d` — see [the install guide → BSD](docs/INSTALL.md#freebsd-and-other-bsds).
+
+> **Want to reach it from outside your home** (over the internet, with HTTPS)? Get it working on your network first, then follow [REVERSE-PROXY.md](docs/REVERSE-PROXY.md) (Linux) or the built-in Caddy wizard on [Windows](docs/WINDOWS.md#5-expose-it-publicly-with-caddy) — and skim [HARDENING.md](HARDENING.md) before you do.
 
 ---
 
@@ -75,31 +145,6 @@ Inside the package, work is split into small layers assembled by an app factory 
 - **Midea AC units** on the same LAN, already provisioned to your WiFi with the *NetHome Plus* app (Breeze Core does not do WiFi provisioning).
 - `curl` + `jq` + `zsh` for the diagnostic/approval CLIs (optional).
 - **Optional, for remote access:** a reverse proxy (nginx or Apache) and a TLS certificate — see [docs/REVERSE-PROXY.md](docs/REVERSE-PROXY.md).
-
----
-
-## Quickstart
-
-This is the shortest path on any distro; the [per-distro install guide](docs/INSTALL.md) covers the packages, service user, firewall, and distro-specific hardening properly.
-
-```bash
-# 1. get the code (example: /opt/breeze-core) and a virtualenv
-sudo mkdir -p /opt/breeze-core && sudo chown "$USER" /opt/breeze-core
-git clone <repo-url> /opt/breeze-core        # or copy the tree here
-cd /opt/breeze-core
-python3 -m venv venv
-./venv/bin/pip install -r requirements.txt
-
-# 2. discover + pair your units (writes config.json; prints an API key once)
-sudo mkdir -p /etc/breeze-core
-AC_CONFIG=/etc/breeze-core/config.json ./venv/bin/python setup_device.py
-
-# 3. run it (bind your LAN IP; 8420 by default)
-AC_CONFIG=/etc/breeze-core/config.json \
-  ./venv/bin/uvicorn meow_ac.app:app --host 192.168.1.10 --port 8420
-```
-
-Open `http://192.168.1.10:8420` on the LAN, enter the API key, and pair. For a real deployment run it as a **systemd service** (survives reboots, sandboxed) — see the install guide.
 
 ---
 
