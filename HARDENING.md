@@ -22,7 +22,7 @@ This is the security review and go-live runbook for taking Breeze Core off the L
 | 8 | X-Forwarded-For spoofing → fake "LAN" client | High | Proxy overwrites XFF with the real peer (`$remote_addr` / `%{REMOTE_ADDR}s`); admin check reads it | ⚙️ (REVERSE-PROXY.md) |
 | 9 | Token/DoS via device round-trips | Med | Proxy rate-limit + timeouts + small `client_max_body_size` | ⚙️ |
 | 10 | Compromised process reaching the internet | Low | systemd `IPAddressAllow` LAN+loopback / `IPAddressDeny=any` | ⚙️ (INSTALL §5) |
-| 11 | Secrets at rest | Low | `config.json`/`devices.json` mode 600; tokens stored **hashed** only | ✅ |
+| 11 | Secrets at rest | Low | `config.json` mode 640 (owner rw, group r — for admin CLIs), `devices.json` mode 600; tokens stored **hashed** only | ✅ |
 
 Items marked ✅ are on by default in the app. ⚙️ items are the deploy-time work in the two guides.
 
@@ -137,7 +137,7 @@ Residual, by design: a **stolen device token** is valid until it expires or is r
 - [ ] Service runs as the unprivileged `breeze` user (not root) — verify `ps -o user= -p <pid>`
 - [ ] fail2ban jails active; filters verified with `fail2ban-regex`
 - [ ] Enrolled a device end-to-end over the public URL, then revoked one and confirmed it stops working
-- [ ] `config.json` / `devices.json` are mode 600, backed up off-box
+- [ ] `config.json` is mode 640 (group-readable for admins in the service group) and `devices.json` is mode 600; both backed up off-box; the state dir is 750 so neither is world-readable
 - [ ] Consider `AC_TOKEN_TTL_DAYS` lower than the 90-day default
 
 Bots *will* find the hostname (it's published in Certificate Transparency logs) — that's what the jails are for. Check `fail2ban-client status breeze-core-tripwire` after a week for your first catches.
@@ -190,7 +190,7 @@ Verify: as the `breeze` user, an outbound connection to a public address should 
 ### Filesystem & privilege
 
 - **Unprivileged user, always.** Every template in [`deploy/init/`](deploy/init/) drops to `breeze` (`command_user` / `chpst -u` / `s6-setuidgid` / `user=` / `--chuid` / `daemon -u`). Confirm with `ps -o user= -p <pid>`.
-- **Least-writable state.** Only `/etc/breeze-core` (or your chosen state dir) needs write access, owned by `breeze`, mode `750`; `config.json` mode `600`. Everything else the process touches should be read-only to it.
+- **Least-writable state.** Only `/etc/breeze-core` (or your chosen state dir) needs write access, owned by `breeze`, mode `750`; `config.json` mode `640` (group-readable so admins you add to the `breeze` group can run the CLIs), `devices.json` mode `600`. The 750 dir means "group" is only the service account + admins you add, never other local users. Everything else the process touches should be read-only to it.
 - **Strongest containment:** run it in a **container with a read-only rootfs** (`docker run --read-only --tmpfs /tmp --cap-drop ALL`, only `/etc/breeze-core` writable — see [DOCKER.md](docs/DOCKER.md)) or a **FreeBSD jail**. Either recovers most of what §4 gives you on systemd, on any host.
 
 ### Everything else is unchanged

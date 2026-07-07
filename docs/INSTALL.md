@@ -121,8 +121,19 @@ sudo AC_CONFIG=/etc/breeze-core/config.json \
 ```bash
 sudo chown -R breeze:breeze /etc/breeze-core /opt/breeze-core
 sudo chmod 750 /etc/breeze-core
-sudo chmod 600 /etc/breeze-core/config.json
+sudo chmod 640 /etc/breeze-core/config.json   # group-readable (see below)
 ```
+
+> **Running the CLIs as yourself (no sudo).** The diagnostic/approval tools
+> (`tools/ac-*.zsh`) read `config.json` directly for the API key. `config.json`
+> is mode **640**, so add your admin user to the service group once, then
+> **log out and back in** — after that the tools work without `sudo`:
+> ```bash
+> sudo usermod -aG breeze "$USER"   # then re-login for it to take effect
+> ```
+> The state dir is `750`, so "group" is only the service account + admins you
+> add. Don't run the tools via `sudo` if they're shell aliases — `sudo` drops
+> your aliases *and* your group membership. See [Troubleshooting](../README.md#troubleshooting).
 
 ---
 

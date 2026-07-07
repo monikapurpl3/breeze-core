@@ -16,4 +16,4 @@ clients of the API, not part of this package.
 Entry point for uvicorn is `meow_ac.app:app` (see meow_ac/app.py).
 """
 
-__version__ = "2.4.2"
+__version__ = "2.4.3"

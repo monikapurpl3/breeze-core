@@ -146,14 +146,18 @@ class ConfigStore:
     # -- writing -------------------------------------------------------
 
     def save(self) -> None:
-        """Persist the current config to disk, mode 600.
+        """Persist the current config to disk, mode 640 (owner rw, group r).
 
-        The file holds the API key and any V3 device tokens in plaintext,
-        so it must never be group/world readable — the chmod is part of
-        the contract, not an afterthought.
+        The file holds the API key and any V3 device tokens in plaintext, so it
+        must never be **world**-readable. It is deliberately **group**-readable:
+        the diagnostic/approval CLIs (`tools/ac-*.zsh`) read it directly for the
+        key + base URL, so an admin added to the service's group can run them
+        without sudo — which is exactly what those tools tell you to do. The
+        containing directory stays 0750 (see INSTALL.md), so "group" means only
+        the trusted service account + admins you add, never other local users.
         """
         config = self.config
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text(config.model_dump_json(indent=2))
-        self.path.chmod(0o600)
+        self.path.chmod(0o640)
         log.info("Wrote %d unit(s) to %s", len(config.units), self.path)

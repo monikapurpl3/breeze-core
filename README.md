@@ -21,6 +21,7 @@ Built on [msmart-ng](https://github.com/mill1000/midea-msmart) (device I/O), [Fa
 - [Control / state schema](#control--state-schema)
 - [Web UI](#web-ui)
 - [Diagnostic & approval tools](#diagnostic--approval-tools)
+- [Troubleshooting](#troubleshooting)
 - [The Breeze app](#the-breeze-app)
 - [Security](#security)
 - [Sharing / license](#sharing--license)
@@ -304,6 +305,68 @@ Both are self-contained zsh scripts that speak only HTTP (they never import the 
 ./tools/ac-approve.zsh --base-url http://<host>:8420 --config /etc/breeze-core/config.json approve <CODE>
 ./tools/ac-approve.zsh --base-url http://<host>:8420 --config /etc/breeze-core/config.json list
 ```
+
+---
+
+## Troubleshooting
+
+First stops: `curl -s http://<host>:8420/api/health` (no auth — should print `{"status":"ok"}`), `curl -H "X-API-Key: <key>" http://<host>:8420/api/version`, the logs (`journalctl -u breeze-core -f`, or the Docker/NSSM logs), and `tools/ac-diag.zsh … --auto`.
+
+<details><summary><b><code>ac-approve</code> / <code>ac-diag</code>: "can't read config.json — run with sudo, or join the group"</b></summary>
+
+The CLIs read `config.json` for the API key. It's mode **640** (group-readable), so the fix is to add your admin user to the service group **once**, then **log out and back in** (group membership only applies to new logins):
+
+```bash
+sudo usermod -aG breeze "$USER"   # use your service group; re-login afterward
+id                                # confirm the group shows up
+```
+
+After that, run the tool **without `sudo`**.
+
+**Don't `sudo acapprove`** (→ `sudo: acapprove: command not found`). If `acapprove` is a shell **alias**, `sudo` starts a fresh shell that has neither your aliases nor your group — so it can't find the command *and* couldn't read the config anyway. If you truly need root, call the script by its real path:
+
+```bash
+sudo zsh /opt/breeze-core/tools/ac-approve.zsh \
+  --base-url http://127.0.0.1:8420 --config /etc/breeze-core/config.json approve <CODE>
+```
+Pairing codes are short-lived (~60 s) — if approval says the code is unknown/expired, just start pairing again from the client.
+</details>
+
+<details><summary><b>The API returns 500, or a message telling you to run <code>setup_device.py</code></b></summary>
+
+The service is up but not paired yet — `config.json` has no `api_key`/units. Run `setup_device.py` (see [INSTALL.md](docs/INSTALL.md#4-discover-and-pair-your-units)) to discover units and mint the key, then restart the service. The static UI at `/` still loads; only the API needs a config.
+</details>
+
+<details><summary><b>Enrollment fails with a 500 / <code>PermissionError</code> writing <code>devices.json</code></b></summary>
+
+The runtime dir must be owned by the service user (it writes `devices.json`/`programs.json` there) — a root-owned dir makes those writes fail:
+```bash
+sudo chown -R breeze:breeze /etc/breeze-core
+sudo chmod 750 /etc/breeze-core && sudo chmod 640 /etc/breeze-core/config.json
+```
+</details>
+
+<details><summary><b>Every request gets 401</b></summary>
+
+The per-device token is missing or expired (separate from the API key). Re-pair the device — the web UI and app do this automatically on a 401. Tune lifetime with `AC_TOKEN_TTL_DAYS`.
+</details>
+
+<details><summary><b>Approving from the LAN still gives 403 ("admin action must come from the LAN")</b></summary>
+
+Approval must originate from a private IP. **Behind a reverse proxy**, every request looks like `127.0.0.1` unless you forward the real client: set `AC_BEHIND_PROXY=1`, run uvicorn with `--proxy-headers --forwarded-allow-ips 127.0.0.1`, and make the proxy **overwrite** `X-Forwarded-For` with the real peer (nginx `$remote_addr`; Caddy does this by default with no `trusted_proxies`). Appending XFF is spoofable — see [HARDENING.md](HARDENING.md).
+</details>
+
+<details><summary><b>Can't reach <code>:8420</code></b></summary>
+
+Behind a proxy the app binds **loopback only** by design — use the proxied HTTPS URL, not `:8420`. On the LAN, check the bind address (a LAN IP, not `0.0.0.0`) and that the firewall allows 8420 from your subnet ([INSTALL.md §6](docs/INSTALL.md#6-open-the-firewall-lan-only)).
+</details>
+
+<details><summary><b>fail2ban locked me out / Windows won't start / Docker finds no units</b></summary>
+
+- **fail2ban:** add your LAN to `ignoreip`; don't let a client spray 401s (an expired token repeated across many units can trip a jail).
+- **Windows:** the service errors until you've paired (run *Pair AC units* first); SmartScreen on the unsigned installer → *More info → Run anyway*. See [docs/WINDOWS.md](docs/WINDOWS.md).
+- **Docker:** discovery (UDP broadcast) needs `--network host`; a bind-mounted state dir must be writable by UID 1001 (`chown 1001:0`). See [docs/DOCKER.md](docs/DOCKER.md).
+</details>
 
 ---
 
