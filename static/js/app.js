@@ -11,6 +11,7 @@ import {
   apiAddUnit, apiRenameUnit, apiDeleteUnit,
 } from "./manage.js";
 import { tempUnit, toggleTempUnit } from "./display.js";
+import { initPalette, buildPalettePicker } from "./theme.js";
 
 const POLL_INTERVAL_MS = 5000;
 const panels = {}; // unit id -> panel object
@@ -189,6 +190,8 @@ async function doAddUnit(){
 }
 
 function wireHeader(){
+  const actions = document.querySelector(".header-actions");
+  if(actions) actions.prepend(buildPalettePicker());  // 🎨 Theme, first
   const toggle = document.getElementById("unitToggle");
   if(toggle){
     toggle.textContent = "°" + tempUnit();
@@ -203,8 +206,31 @@ function wireHeader(){
   if(emptyAdd) emptyAdd.addEventListener("click", doAddUnit);
 }
 
+// Fill the page footer with the server's version + build commit.
+async function loadVersion(){
+  const el = document.getElementById("appFooter");
+  if(!el) return;
+  try{
+    const res = await apiFetch("/api/version");
+    if(!res.ok) return;
+    const v = await res.json();
+    el.textContent = "";
+    const name = document.createElement("span");
+    name.textContent = `${v.name || "Breeze Core"} v${v.version}`;
+    el.appendChild(name);
+    if(v.commit && v.commit !== "unknown"){
+      el.appendChild(document.createTextNode(" · "));
+      const c = document.createElement("code");
+      c.textContent = v.commit;
+      el.appendChild(c);
+    }
+  }catch(_){/* footer is best-effort */}
+}
+
 async function init(){
-  wireHeader();  // header (add unit, °C/°F) works even with zero units
+  initPalette();  // apply the saved colour palette before first paint
+  wireHeader();   // header (theme, add unit, °C/°F) works even with zero units
+  loadVersion();  // fill the footer (best-effort, independent of units)
   const units = await loadUnits();
   if(units === null) return;
   buildGrid(units);

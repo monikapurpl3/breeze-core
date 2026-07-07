@@ -280,7 +280,7 @@ A **program** targets units (`unit_ids`, empty = all) and is one `kind`:
 
 ## Web UI
 
-`static/`, served at `/`. Self-contained native ES modules — no build step, no external dependencies. Prompts for the API key on first load (stored in `localStorage`), runs the pairing flow, then shows a live control card per unit. Strict CSP; all styling is in `css/styles.css`, all logic in `js/` modules.
+`static/`, served at `/`. Self-contained native ES modules — no build step, no external dependencies. Prompts for the API key on first load (stored in `localStorage`), runs the pairing flow, then shows a live control card per unit. Manage units (add by IP / rename / remove), toggle °C/°F, and pick from a set of **Material You-like colour palettes** (header 🎨, saved per browser). A footer shows the server's version + build commit (from `/api/version`). Strict CSP; all styling is in `css/styles.css`, all logic in `js/` modules.
 
 ---
 

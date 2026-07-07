@@ -1,14 +1,29 @@
 :root{
-  --bg: #0a0c0f;
-  --surface: #14171c;
-  --surface-2: #1b1f26;
-  --border: #262b33;
-  --text: #e4e7eb;
-  --muted: #6b7280;
+  /* Palette seed — overridden by [data-palette]; drives accent + neutrals. */
+  --seed: #4fd1c5;
+  --accent: var(--seed);   /* per-mode rules tweak this, never --seed */
+  --brand: var(--seed);    /* buttons / focus / pairing accents */
+  /* Neutrals are hue-tinted toward the seed so each palette feels cohesive
+     (Material You-style). They follow --seed, not --accent, so a unit's mode
+     colour doesn't retint the whole card. */
+  --bg: color-mix(in srgb, var(--seed) 5%, #08090b);
+  --surface: color-mix(in srgb, var(--seed) 6%, #101319);
+  --surface-2: color-mix(in srgb, var(--seed) 9%, #171b22);
+  --border: color-mix(in srgb, var(--seed) 13%, #242a33);
+  --text: #e7eaee;
+  --muted: #8b93a0;
   --bad: #e25c5c;
-  --radius: 14px;
+  --radius: 18px;
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
+
+/* Predefined Material You-like palettes (pick one in the header). */
+:root[data-palette="teal"]{   --seed: #4fd1c5; }
+:root[data-palette="indigo"]{ --seed: #7aa2f7; }
+:root[data-palette="violet"]{ --seed: #b48ead; }
+:root[data-palette="rose"]{   --seed: #ec7fa9; }
+:root[data-palette="green"]{  --seed: #7bd88f; }
+:root[data-palette="amber"]{  --seed: #e0af68; }
 
 *{ box-sizing: border-box; }
 html,body{ height:100%; }
@@ -29,10 +44,10 @@ body{
   gap: 10px;
 }
 .page-header h1{
-  font-size: 17px;
-  font-weight: 600;
+  font-size: 22px;
+  font-weight: 700;
   margin: 0;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
 }
 .page-header span{
   font-size: 13px;
@@ -55,26 +70,71 @@ body{
   font-weight: 500;
   cursor: pointer;
 }
-.ghost-btn:hover{ border-color: #4fd1c5; }
+.ghost-btn{ padding: 9px 15px; font-size: 13px; }
+.ghost-btn:hover{ border-color: var(--brand); }
 .ghost-btn:active{ transform: scale(0.97); }
 
+/* --- palette picker (header) --- */
+.palette-picker{ position: relative; }
+.palette-pop{
+  position: absolute;
+  right: 0; top: 42px;
+  z-index: 40;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  padding: 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.45);
+}
+.swatch{
+  width: 30px; height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  outline: 2px solid var(--border);
+  outline-offset: 2px;
+  transition: transform 0.12s ease, outline-color 0.15s ease;
+}
+.swatch:hover{ transform: scale(1.1); }
+.swatch.active{ outline-color: var(--text); }
+
+/* --- page footer (server build info) --- */
+.app-footer{
+  max-width: 1180px;
+  margin: 30px auto 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+  min-height: 18px;
+}
+.app-footer code{
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--text);
+}
+
 .grid{
-  max-width: 1100px;
+  max-width: 1180px;
   margin: 0 auto;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 20px;
 }
 @media (max-width: 620px){
   .grid{ grid-template-columns: 1fr; }
 }
 
 .unit-panel{
-  --accent: #4fd1c5;
+  --accent: var(--seed);
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 20px;
+  padding: 24px;
   transition: border-color 0.3s ease;
 }
 .unit-panel[data-mode="HEAT"]{ --accent: #f0954b; }
@@ -96,8 +156,8 @@ body{
   gap: 12px;
 }
 .unit-name{
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 18px;
+  font-weight: 700;
   letter-spacing: -0.01em;
 }
 .status{
@@ -164,16 +224,16 @@ body{
 
 .dial-wrap{
   position: relative;
-  width: 180px;
-  height: 180px;
-  margin: 0 auto 18px;
+  width: 212px;
+  height: 212px;
+  margin: 0 auto 20px;
 }
 .dial-wrap svg{ width:100%; height:100%; transform: rotate(-90deg); }
-.dial-track{ fill:none; stroke: var(--surface-2); stroke-width: 9; }
+.dial-track{ fill:none; stroke: var(--surface-2); stroke-width: 10; }
 .dial-fill{
   fill:none;
   stroke: var(--accent);
-  stroke-width: 9;
+  stroke-width: 10;
   stroke-linecap: round;
   transition: stroke-dashoffset 0.6s ease, stroke 0.4s ease;
 }
@@ -183,43 +243,43 @@ body{
   align-items:center; justify-content:center;
   gap: 2px;
 }
-.indoor-temp{ font-size: 38px; font-weight: 600; letter-spacing: -0.02em; }
-.indoor-label{ font-size: 10px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
+.indoor-temp{ font-size: 50px; font-weight: 700; letter-spacing: -0.03em; }
+.indoor-label{ font-size: 11px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
 .target-row{
   display:flex; align-items:center; gap: 6px;
-  font-size: 12px; color: var(--muted);
-  margin-top: 6px;
+  font-size: 13px; color: var(--muted);
+  margin-top: 7px;
 }
 .target-row .target-val{ color: var(--text); font-weight: 600; }
 
 .stepper{
   display:flex; align-items:center; justify-content:center;
-  gap: 14px; margin-bottom: 16px;
+  gap: 18px; margin-bottom: 18px;
 }
 .stepper button{
-  width: 38px; height: 38px;
+  width: 48px; height: 48px;
   border-radius: 50%;
   border: 1px solid var(--border);
   background: var(--surface-2);
   color: var(--text);
-  font-size: 17px;
+  font-size: 22px;
   font-family: var(--font);
   cursor: pointer;
 }
 .stepper button:active{ transform: scale(0.95); }
-.stepper .target{ font-size: 18px; font-weight: 600; min-width: 56px; text-align:center; }
+.stepper .target{ font-size: 24px; font-weight: 700; min-width: 76px; text-align:center; }
 
-.row{ display:flex; gap: 7px; margin-bottom: 9px; flex-wrap: wrap; }
+.row{ display:flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
 .pill{
   flex:1;
-  min-width: 50px;
-  padding: 8px 0;
+  min-width: 56px;
+  padding: 11px 0;
   text-align:center;
   border-radius: 999px;
   border: 1px solid var(--border);
   background: var(--surface-2);
   color: var(--muted);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 500;
   letter-spacing: 0.02em;
   cursor: pointer;
@@ -232,21 +292,21 @@ body{
   font-weight: 600;
 }
 
-.toggles{ display:flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.toggles{ display:flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
 .toggle{
-  flex: 1 1 calc(50% - 4px);
-  min-width: 110px;
+  flex: 1 1 calc(50% - 5px);
+  min-width: 120px;
   display:flex; align-items:center; justify-content:space-between;
-  padding: 9px 12px;
-  border-radius: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
   border: 1px solid var(--border);
   background: var(--surface-2);
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted);
 }
 .switch{
   position: relative;
-  width: 34px; height: 18px;
+  width: 38px; height: 20px;
   border-radius: 999px;
   background: var(--border);
   cursor: pointer;
@@ -255,17 +315,17 @@ body{
 .switch::after{
   content:"";
   position:absolute; top:2px; left:2px;
-  width:14px; height:14px;
+  width:16px; height:16px;
   border-radius:50%;
   background: var(--muted);
   transition: all 0.2s ease;
 }
 .switch.on{ background: color-mix(in srgb, var(--accent) 35%, var(--surface-2)); }
-.switch.on::after{ left: 18px; background: var(--accent); }
+.switch.on::after{ left: 20px; background: var(--accent); }
 
-.power-switch{ width: 44px; height: 23px; }
-.power-switch::after{ width: 17px; height: 17px; }
-.power-switch.on::after{ left: 23px; }
+.power-switch{ width: 50px; height: 26px; }
+.power-switch::after{ width: 20px; height: 20px; }
+.power-switch.on::after{ left: 26px; }
 
 .footer{
   margin-top: 12px;
@@ -334,13 +394,13 @@ body{
   font-family: var(--font);
   font-size: 13px;
 }
-.enroll-input:focus{ outline: none; border-color: #4fd1c5; }
+.enroll-input:focus{ outline: none; border-color: var(--brand); }
 .enroll-btn{
   width: 100%;
   padding: 11px 0;
   border-radius: 10px;
-  border: 1px solid #4fd1c5;
-  background: #4fd1c5;
+  border: 1px solid var(--brand);
+  background: var(--brand);
   color: var(--bg);
   font-family: var(--font);
   font-size: 13px;
@@ -378,7 +438,7 @@ body{
   letter-spacing: 0.08em;
   font-variant-numeric: tabular-nums;
   margin: 8px 0 6px;
-  color: #4fd1c5;
+  color: var(--brand);
 }
 .enroll-countdown{
   font-size: 12px;

@@ -44,8 +44,11 @@ COPY meow_ac ./meow_ac
 COPY static ./static
 COPY setup_device.py requirements.txt ./
 
+# Stamp the build's git commit so /api/version can report it.
+ARG AC_COMMIT=""
 ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
+    AC_COMMIT=$AC_COMMIT \
     AC_CONFIG=/etc/breeze-core/config.json \
     AC_DEVICES=/etc/breeze-core/devices.json \
     AC_PROGRAMS=/etc/breeze-core/programs.json

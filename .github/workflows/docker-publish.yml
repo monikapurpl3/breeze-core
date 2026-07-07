@@ -41,6 +41,8 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            AC_COMMIT=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -80,7 +82,9 @@ jobs:
           context: .
           file: Dockerfile.march
           platforms: linux/amd64
-          build-args: MARCH=${{ matrix.march }}
+          build-args: |
+            MARCH=${{ matrix.march }}
+            AC_COMMIT=${{ github.sha }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
