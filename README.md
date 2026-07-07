@@ -282,6 +282,14 @@ A **program** targets units (`unit_ids`, empty = all) and is one `kind`:
 
 `static/`, served at `/`. Self-contained native ES modules — no build step, no external dependencies. Prompts for the API key on first load (stored in `localStorage`), runs the pairing flow, then shows a live control card per unit. Manage units (add by IP / rename / remove), toggle °C/°F, and pick from a set of **Material You-like colour palettes** (header 🎨, saved per browser). A footer shows the server's version + build commit (from `/api/version`). Strict CSP; all styling is in `css/styles.css`, all logic in `js/` modules.
 
+![Breeze Core web UI — dashboard](docs/img/web-ui.png)
+
+<sub>Example dashboard with sample rooms — a live card per unit (dial + setpoint, mode, fan, eco/turbo, and the two flaps), and the version/commit footer.</sub>
+
+![Breeze Core web UI — colour palettes](docs/img/web-ui-palettes.png)
+
+<sub>Six built-in Material You-like palettes, switchable from the header 🎨. (All data shown is a non-representative example.)</sub>
+
 ---
 
 ## Diagnostic & approval tools
