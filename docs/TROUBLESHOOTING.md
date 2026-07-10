@@ -103,8 +103,21 @@ must be writable by UID 1001 (`chown 1001:0`). See [DOCKER.md](DOCKER.md).
 
 ## The diagnostic & approval CLIs
 
-Both are self-contained zsh scripts that speak only HTTP (they never import
-the package). They read `config.json` for the key.
+They come in two equivalent forms — pick whichever your install has:
+
+- **Built into the binary/packages** (v2.6.0+): `breeze-core diag`,
+  `breeze-core approve <CODE>`, `breeze-core devices`,
+  `breeze-core revoke <token_id>` — same flags as the zsh tool below
+  (`--auto`, `--unit`, `--base-url`, `--config`, `--token`, `--pair`,
+  `--no-pair`, `--forget-token`, `--with-control-test`). On a source or
+  Windows install the same commands are available as
+  `python -m meow_ac.cli diag …`.
+- **The original zsh scripts** (`tools/ac-diag.zsh`, `tools/ac-approve.zsh`)
+  for source installs — zero dependencies beyond `zsh`, `curl`, `jq`.
+
+Both forms speak only HTTP (they never touch the server's internals), read
+`config.json` for the key, and share the same device-token cache
+(`~/.config/ac-diag/token`), so pairing once covers both.
 
 **`ac-diag.zsh`** checks, in one run: connectivity (`/api/health`), **server
 version + build commit + advertised features** (`/api/version`), the auth

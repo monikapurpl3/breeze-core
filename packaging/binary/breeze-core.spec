@@ -15,7 +15,8 @@ from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 hiddenimports = (
     collect_submodules("uvicorn")     # uvicorn loads loops/protocols dynamically
     + collect_submodules("msmart")    # device I/O; keep every protocol module
-    + ["brotli_asgi", "brotli", "setup_device"]
+    + ["brotli_asgi", "brotli", "setup_device",
+       "meow_ac.cli.main", "meow_ac.cli.diag", "meow_ac.cli.approve", "meow_ac.cli.client"]
 )
 
 datas = (

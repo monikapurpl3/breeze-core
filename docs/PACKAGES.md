@@ -71,7 +71,9 @@ Alpine/Void/Gentoo + an arm64 pass) before a release goes out.
 ## Package details
 
 - **Program:** `/usr/lib/breeze-core/` (self-contained bundle), `breeze-core`
-  on `PATH`. Subcommands: `serve`, `pair`, `version`.
+  on `PATH`. Subcommands: `serve`, `pair`, `version`, plus the admin/diagnostic
+  tools: `diag` (full health/security battery), `approve <CODE>`, `devices`,
+  `revoke <token_id>` — see [TROUBLESHOOTING.md](TROUBLESHOOTING.md#the-diagnostic--approval-clis).
 - **State:** `/etc/breeze-core/` — `config.json` (mode 640), `devices.json`,
   `programs.json`; owned by the `breeze` service user; dir mode 750.
 - **Service config:** `/etc/breeze-core/breeze-core.env` (`BREEZE_HOST`,
