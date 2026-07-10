@@ -1,17 +1,45 @@
+[← Breeze Core](../README.md)
+
 # Installing Breeze Core (from source)
 
 > **Shortcut:** every release ships **prebuilt, self-contained packages**
-> (.deb / .rpm / .pkg.tar.zst / .apk / tarball — no Python needed, hardened
-> service included). If you just want it running, start at
+> (.deb / .rpm / .pkg.tar.zst / .apk / opkg / tarball — no Python needed,
+> hardened service included). If you just want it running, start at
 > **[PACKAGES.md](PACKAGES.md)**. This guide is the classic from-source
 > install for people who want to own every layer.
 
-This installs Breeze Core as a hardened **systemd service** on a Linux host on the same LAN as your Midea units. It's LAN-only by default; to reach it from outside your network, do this first, then follow [REVERSE-PROXY.md](REVERSE-PROXY.md).
+This installs Breeze Core as a hardened **systemd service** on a Linux host
+on the same LAN as your Midea units. It's LAN-only by default; to reach it
+from outside your network, do this first, then follow
+[REVERSE-PROXY.md](REVERSE-PROXY.md).
 
-> **Not on systemd? Not on glibc?** The application is the same everywhere — `uvicorn meow_ac.app:app` with a few env vars — only *how you supervise it* and *how you install the Python deps* change. Sections 1–4 (packages, user, venv, pairing) apply to every OS; then jump to your platform instead of section 5:
-> **[non-systemd init](#running-without-systemd-openrc-runit-s6-supervisord-sysv)** (OpenRC / runit / s6 / supervisord / SysV) · **[non-glibc / musl](#non-glibc-musl-libc-systems)** (Alpine, Void-musl) · **[FreeBSD/BSD](#freebsd-and-other-bsds)** · **[macOS](#macos)** · **[NixOS](#nixos-declarative)** · **[Windows](WINDOWS.md)** / **[WSL](#wsl-windows-subsystem-for-linux)**. The one thing only systemd gives you out of the box is the kernel-level sandbox (§5) — [HARDENING.md](../HARDENING.md#7-hardening-without-systemd) shows how to recover the equivalents elsewhere.
+## Find your path
 
-The layout we build (all paths are conventions — change them freely, they're wired via env vars):
+The application is the same everywhere — `uvicorn meow_ac.app:app` with a few
+env vars. Only *how you supervise it* and *how you install the Python deps*
+change. **Sections 1–4** (packages, user, venv, pairing) apply to every OS;
+then take the branch that matches your system:
+
+| Your system | Follow |
+|---|---|
+| Linux with systemd (most distros) | sections [1](#1-install-system-packages)–[7](#7-distro-specific-hardening-extras) straight through — pick your family in section 1: [RHEL](#1a-rhel--compatibles) · [Debian](#1b-debian--compatibles) · [SUSE](#1c-opensuse--sles) · [Arch & others](#1d-arch--other-distros) |
+| OpenRC / runit / s6 / supervisord / SysV | sections 1–4, then [Running without systemd](#running-without-systemd-openrc-runit-s6-supervisord-sysv) |
+| musl libc (Alpine, Void-musl, …) | read [Non-glibc systems](#non-glibc-musl-libc-systems) before the `pip install`, then as above |
+| FreeBSD / other BSD | [FreeBSD and other BSDs](#freebsd-and-other-bsds) (rc.d, pf, jails) |
+| macOS | [macOS](#macos) (launchd) |
+| NixOS | skip 1–5 entirely → [NixOS (declarative)](#nixos-declarative) |
+| Windows / WSL | [WINDOWS.md](WINDOWS.md) / [WSL](#wsl-windows-subsystem-for-linux) |
+
+The one thing only systemd gives you out of the box is the kernel-level
+sandbox (section 5) —
+[HARDENING.md §7](../HARDENING.md#7-hardening-without-systemd) shows how to
+recover the equivalents elsewhere.
+
+## The layout we build
+
+All paths are conventions — change them freely, they're wired via env vars.
+The one fixed technical name is the ASGI entry point **`meow_ac.app:app`**
+(the Python package is `meow_ac`).
 
 ```
 /opt/breeze-core/        the code + a Python virtualenv (venv/)
@@ -19,11 +47,6 @@ The layout we build (all paths are conventions — change them freely, they're w
 /etc/systemd/system/breeze-core.service
 service user:            breeze  (system account, no login, no home)
 ```
-
-> The one fixed technical name is the ASGI entry point **`meow_ac.app:app`** (the Python package is `meow_ac`). Everything else below is your choice.
-
-Jump to your distro for packages and firewall, then follow the common steps:
-[RHEL & compatibles](#1a-rhel--compatibles) · [Debian & compatibles](#1b-debian--compatibles) · [openSUSE / SLES](#1c-opensuse--sles) · [Arch & others](#1d-arch--other-distros) · [NixOS](#nixos-declarative) · then [common setup](#2-create-the-service-user-and-directories).
 
 ---
 
@@ -139,7 +162,7 @@ sudo chmod 640 /etc/breeze-core/config.json   # group-readable (see below)
 > ```
 > The state dir is `750`, so "group" is only the service account + admins you
 > add. Don't run the tools via `sudo` if they're shell aliases — `sudo` drops
-> your aliases *and* your group membership. See [Troubleshooting](../README.md#troubleshooting).
+> your aliases *and* your group membership. See [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
 ---
 

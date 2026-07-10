@@ -1,8 +1,19 @@
+[← Breeze Core](../README.md)
+
 # Installing from packages (no Python needed)
 
 Every release ships **self-contained builds** — the server, its web UI, and a
 private Python runtime in one bundle, wrapped as native packages. Nothing to
 compile, no Python to install, no venv.
+
+**Contents:**
+[Package repository](#the-package-repository-recommended) ·
+[Manual download](#manual-download-github-releases) ·
+[Package details](#package-details) ·
+[NixOS / Nix](#nixos--nix) ·
+[For packagers](#source-recipes-for-packagers) ·
+[OpenWrt](#openwrt) ·
+[BSDs](#freebsd-netbsd)
 
 ## The package repository (recommended)
 

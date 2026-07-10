@@ -1,3 +1,5 @@
+[← Breeze Core](../README.md)
+
 # Running Breeze Core in Docker
 
 A compact, non-root container built on Red Hat **UBI 9 minimal** (free & redistributable, glibc, security-patched). Image: `ghcr.io/monikapurpl3/breeze-core`.

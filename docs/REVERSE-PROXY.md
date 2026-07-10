@@ -1,6 +1,16 @@
+[← Breeze Core](../README.md)
+
 # Exposing Breeze Core beyond the LAN
 
 By default Breeze Core is LAN-only. To reach it from outside your network you put a **reverse proxy** in front that terminates **TLS**, and you keep the app bound to loopback so the proxy is the only way in.
+
+**Contents:**
+[0. Prerequisites](#0-prerequisites) ·
+[1. Loopback + proxy trust](#1-re-point-the-app-at-loopback--trust-the-proxy) ·
+[2. Reverse proxy (nginx / Apache)](#2-reverse-proxy) ·
+[3. TLS certificate (certbot / acme.sh)](#3-tls-certificate) ·
+[4. Verify](#4-verify) ·
+[5. Next](#5-next)
 
 > A VPN (WireGuard/Tailscale) avoids public exposure altogether and is worth considering; otherwise read this alongside [HARDENING.md](../HARDENING.md).
 

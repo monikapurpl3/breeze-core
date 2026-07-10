@@ -1,6 +1,17 @@
+[← Breeze Core](README.md)
+
 # Hardening Breeze Core for public exposure
 
 This is the security review and go-live runbook for taking Breeze Core off the LAN. The *mechanics* of setup live in [docs/INSTALL.md](docs/INSTALL.md) and [docs/REVERSE-PROXY.md](docs/REVERSE-PROXY.md); this document is the **why**, the threat model, and the checklist.
+
+**Contents:**
+[1. Findings & mitigations](#1-findings-and-mitigations) ·
+[2. App settings for public exposure](#2-application-settings-for-public-exposure) ·
+[3. fail2ban](#3-fail2ban) ·
+[4. systemd sandbox & egress](#4-systemd-sandbox--egress) ·
+[5. Auth model & residual risk](#5-the-authentication-model--residual-risk) ·
+[6. Go-live checklist](#6-go-live-checklist) ·
+[7. Hardening without systemd](#7-hardening-without-systemd)
 
 > **Status legend:** ✅ enforced by the app · ⚙️ you configure at deploy time · 💡 optional/further
 >

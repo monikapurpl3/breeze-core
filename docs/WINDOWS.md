@@ -1,3 +1,5 @@
+[← Breeze Core](../README.md)
+
 # Breeze Core on Windows
 
 A first-class Windows deployment: Breeze Core runs as a hardened **Windows
@@ -5,6 +7,17 @@ service** (via the bundled [NSSM](https://nssm.cc/)), with an optional guided
 **Caddy** reverse proxy for public HTTPS and a **fail2ban-style** IP banner.
 There's a click-through **NSIS installer**, or you can drive the same
 PowerShell scripts by hand.
+
+**Contents:**
+[1. Prerequisites](#1-prerequisites) ·
+[2. Guided installer](#2-install--the-guided-installer-recommended) ·
+[3. Manual install](#3-install--manually-no-installer) ·
+[4. Day to day](#4-the-service-day-to-day) ·
+[5. Caddy / public HTTPS](#5-expose-it-publicly-with-caddy) ·
+[6. Tripwire](#6-brute-force-defence--the-tripwire-fail2ban-parity) ·
+[7. Hardening notes](#7-hardening-notes) ·
+[8. Uninstall](#8-uninstall) ·
+[9. Build it yourself](#9-build-the-installer-yourself)
 
 > **What you get, and the trade-off.** The service runs unprivileged
 > (`LOCAL SERVICE`), keeps its state in a locked-down `%ProgramData%\breeze-core`,
@@ -89,7 +102,7 @@ nssm start BreezeCore
 
 `install-service.ps1` flags: `-BindHost <ip>` (default: auto-detected LAN IP),
 `-Port 8420`, `-BehindProxy` (bind loopback + `--proxy-headers` + `AC_BEHIND_PROXY=1`),
-`-LockEgress` (best-effort outbound lockdown, see [sec. 6](#6-hardening-notes)),
+`-LockEgress` (best-effort outbound lockdown, see [sec. 7](#7-hardening-notes)),
 `-NoFirewall`, and `-Action Uninstall [-Purge]`.
 
 ---
