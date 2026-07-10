@@ -61,6 +61,14 @@ sudo pacman -Sy breeze-core</pre>
 echo "https://bolero.salataputarica.hr.eu.org/alpine" | sudo tee -a /etc/apk/repositories
 sudo apk update && sudo apk add breeze-core</pre>
 
+  <h2>OpenWrt <span class="muted">(x86_64 / aarch64 devices with ~65&nbsp;MB free — extroot counts)</span></h2>
+  <pre>wget -q -O /tmp/breeze.pub https://bolero.salataputarica.hr.eu.org/openwrt/breeze-core-usign.pub
+cp /tmp/breeze.pub "/etc/opkg/keys/$(usign -F -p /tmp/breeze.pub)"
+echo "src/gz breeze_core https://bolero.salataputarica.hr.eu.org/openwrt/$(. /etc/openwrt_release; echo $DISTRIB_ARCH)" \
+  >> /etc/opkg/customfeeds.conf
+opkg update && opkg install breeze-core
+# then: breeze-core pair && /etc/init.d/breeze-core start   (procd service)</pre>
+
   <h2>After installing (any distro)</h2>
   <pre>sudo breeze-core pair                        # find your ACs, write the config
 sudoedit /etc/breeze-core/breeze-core.env    # BREEZE_HOST=&lt;this machine's LAN IP&gt;

@@ -25,7 +25,7 @@ APK_KEY_NAME="breeze-core@bolero"
 
 MOUNT="$REPO"
 case "$MOUNT" in /[a-z]/*) MOUNT="$(echo "$MOUNT" | sed -E 's#^/([a-z])/#\U\1:/#')" ;; esac
-drun() { MSYS_NO_PATHCONV=1 docker run --rm -v "$MOUNT:/work" -w /work "$@"; }
+drun() { MSYS_NO_PATHCONV=1 docker run -i --rm -v "$MOUNT:/work" -w /work "$@"; }
 
 [ -e "$PKG/breeze-core_${VER}_amd64.deb" ] || { echo "no packages for $VER — run build-packages.sh first"; exit 1; }
 
@@ -162,6 +162,49 @@ drun alpine:3.20 sh -c "
   mkdir -p /work/packaging/out/repo/alpine
   cp -R \"\$W\"/. /work/packaging/out/repo/alpine/
 "
+
+# --- opkg feed (OpenWrt) ---------------------------------------------------------
+# opkg verifies feeds with usign (OpenWrt's ed25519 signer) — GPG is useless
+# to it. usign is tiny; build it from source in the container. Key generated
+# on first run into keys/ like the others.
+echo "=== opkg feed (OpenWrt) ==="
+drun alpine:3.20 sh -s <<'EOS'
+set -eu
+apk add --no-cache build-base cmake git >/dev/null
+git clone -q https://github.com/openwrt/usign /tmp/usign
+cmake -S /tmp/usign -B /tmp/usign/b >/dev/null && make -s -C /tmp/usign/b
+US=/tmp/usign/b/usign
+
+K=/work/packaging/repo/keys
+if [ ! -f "$K/usign.sec" ]; then
+    echo "  generating usign key (first run)"
+    "$US" -G -s "$K/usign.sec" -p "$K/usign.pub" -c "Breeze Core repository"
+fi
+
+R=/work/packaging/out/repo/openwrt
+rm -rf "$R"
+for f in /work/packaging/out/pkg/breeze-core_*_*.ipk; do
+    [ -e "$f" ] || { echo "no .ipk files — run packaging/openwrt/build-ipk.sh"; exit 1; }
+    # filename contract: breeze-core_<ver>-1_<arch>.ipk; arch labels contain
+    # underscores (aarch64_generic), so take fields 3+ — not the last field.
+    arch="$(basename "$f" .ipk | cut -d_ -f3-)"
+    mkdir -p "$R/$arch"; cp "$f" "$R/$arch/"
+done
+for d in "$R"/*/; do (
+    cd "$d"
+    : > Packages
+    for p in *.ipk; do
+        tar -xzOf "$p" ./control.tar.gz | tar -xzO ./control >> Packages
+        printf 'Filename: %s\nSize: %s\nSHA256sum: %s\n\n' \
+            "$p" "$(wc -c < "$p")" "$(sha256sum "$p" | cut -d" " -f1)" >> Packages
+    done
+    gzip -9k Packages
+    "$US" -S -m Packages -s /work/packaging/repo/keys/usign.sec -x Packages.sig
+); done
+cp "$K/usign.pub" "$R/breeze-core-usign.pub"
+"$US" -F -p "$K/usign.pub" > "$R/breeze-core-usign.fingerprint"
+echo "  feed signed (usign fpr $(cat "$R/breeze-core-usign.fingerprint"))"
+EOS
 
 # --- landing page ---------------------------------------------------------------
 sed "s/@VERSION@/$VER/g" packaging/repo/index.html > "$OUT/index.html"

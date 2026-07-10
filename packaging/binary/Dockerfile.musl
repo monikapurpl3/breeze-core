@@ -1,13 +1,15 @@
 # syntax=docker/dockerfile:1
-# Self-contained musl bundle for Alpine / Void-musl, built on Alpine 3.20
-# (python 3.12; deps come as musllinux wheels — no compiler needed).
+# Self-contained musl bundle for Alpine / Void-musl / OpenWrt. Built on
+# Alpine 3.19 ON PURPOSE: its musl 1.2.4 is the floor for OpenWrt 23.05
+# (3.20's musl 1.2.5 links pwritev2, which 23.05 lacks). Newer musl systems
+# run older-musl binaries fine, so this one bundle covers them all.
 # Works for linux/amd64 and linux/arm64 (pick with --platform).
 #
 #   docker buildx build --platform linux/amd64 -f packaging/binary/Dockerfile.musl \
 #     --build-arg AC_COMMIT=$(git rev-parse --short HEAD) \
 #     -o type=local,dest=packaging/out/bundle-musl-amd64 .
 
-FROM alpine:3.20 AS build
+FROM alpine:3.19 AS build
 
 # binutils: PyInstaller needs objdump/objcopy to assemble the bundle.
 RUN apk add --no-cache python3 py3-pip binutils

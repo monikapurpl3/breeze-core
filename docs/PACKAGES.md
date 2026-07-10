@@ -41,6 +41,7 @@ tokens) unless you delete it yourself.
 | Fedora, RHEL, AlmaLinux, Rocky, openSUSE Leap/Tumbleweed, SLE | `breeze-core-<v>-1.x86_64.rpm` (or `.aarch64`) | `sudo dnf install ./breeze-core-<v>-1.x86_64.rpm` / `sudo zypper in --allow-unsigned-rpm ./…` |
 | Arch, Manjaro, Artix | `breeze-core-<v>-1-x86_64.pkg.tar.zst` | `sudo pacman -U breeze-core-<v>-1-x86_64.pkg.tar.zst` |
 | Alpine | `breeze-core_<v>_x86_64.apk` (or `_aarch64`) | `sudo apk add --allow-untrusted ./breeze-core_<v>_x86_64.apk` |
+| OpenWrt (x86_64 / aarch64, ~65 MB free) | signed **opkg feed** on the repo | see [OpenWrt](#openwrt) below |
 | Void, Gentoo, Slackware, anything else | `breeze-core-<v>-linux-<glibc\|musl>-<amd64\|arm64>.tar.gz` | unpack, then `sudo ./install.sh` |
 | Windows | `Breeze-Core-Setup.exe` | double-click — see [WINDOWS.md](WINDOWS.md) |
 | Docker / Podman | `ghcr.io/monikapurpl3/breeze-core` | see [DOCKER.md](DOCKER.md) |
@@ -103,9 +104,33 @@ Prefer building from source, or maintaining a distro repo? See
 Void `xbps-src` template. The classic source install (venv + systemd unit)
 remains fully documented in [INSTALL.md](INSTALL.md).
 
-## FreeBSD, NetBSD, OpenWrt
+## OpenWrt
 
-No prebuilt bundles (different kernels / exotic architectures) — the
-[source install](INSTALL.md#freebsd-and-other-bsds) works today on the BSDs,
-and OpenWrt is documented there too. Native `.pkg` builds via poudriere are
-planned.
+Real `.ipk` packages from a **usign-signed opkg feed** — the same signer
+OpenWrt itself uses, so `opkg update` verifies the feed. Covers **x86_64**
+and the common **aarch64** targets (`aarch64_generic`, `cortex-a53`,
+`cortex-a72`); the app needs **~65 MB of storage**, so this is for x86
+boxes, RPi/NAS-class devices, or routers with
+[extroot](https://openwrt.org/docs/guide-user/additional-software/extroot_configuration):
+
+```sh
+wget -q -O /tmp/breeze.pub https://bolero.salataputarica.hr.eu.org/openwrt/breeze-core-usign.pub
+cp /tmp/breeze.pub "/etc/opkg/keys/$(usign -F -p /tmp/breeze.pub)"
+echo "src/gz breeze_core https://bolero.salataputarica.hr.eu.org/openwrt/$(. /etc/openwrt_release; echo $DISTRIB_ARCH)" \
+  >> /etc/opkg/customfeeds.conf
+opkg update && opkg install breeze-core
+```
+
+Then `breeze-core pair`, set `BREEZE_HOST` in
+`/etc/breeze-core/breeze-core.env`, and `/etc/init.d/breeze-core start` — it
+runs as the unprivileged `breeze` user under **procd** with respawn. Works on
+OpenWrt **23.05 and newer** (the musl bundles are built against musl 1.2.4
+for exactly this reason). Other router architectures (mips, arm32) can't fit
+or run the self-contained bundle — for those, nothing beats a small x86/ARM64
+box next to the router.
+
+## FreeBSD, NetBSD
+
+No prebuilt packages (different kernel — the Linux bundles can't run) — the
+[source install](INSTALL.md#freebsd-and-other-bsds) works today on the BSDs.
+Native `.pkg` builds via poudriere are planned.

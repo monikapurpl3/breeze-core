@@ -50,27 +50,7 @@ New here? Pick how you want to run it. **Every path ends the same way: open the 
 
 **Before you start:** your Midea unit should already be on your Wi-Fi (you do that once with the *NetHome Plus* phone app). Then pick one:
 
-### 🐳 Docker — easiest, any operating system
-
-If you have Docker, this is the least fuss — two commands:
-
-```bash
-# 1. find your AC units and pair (this prints an access key once — copy it)
-docker run --rm -it --network host -v breeze:/etc/breeze-core \
-  ghcr.io/monikapurpl3/breeze-core:latest python setup_device.py
-
-# 2. leave it running
-docker run -d --name breeze --restart unless-stopped --network host \
-  -v breeze:/etc/breeze-core ghcr.io/monikapurpl3/breeze-core:latest
-```
-
-Then open **`http://<this-computer's-IP>:8420`** in a browser. Compose file, updates, and options → [docs/DOCKER.md](docs/DOCKER.md).
-
-### 🪟 Windows — just double-click an installer
-
-Download **`Breeze-Core-Setup.exe`** from the [latest release](https://github.com/monikapurpl3/breeze-core/releases/latest) and run it. It sets Breeze Core up as a background service and offers to find your units for you — no commands to type. Full walkthrough → [docs/WINDOWS.md](docs/WINDOWS.md).
-
-### 🐧 Linux — add the package repo, updates included
+### 🐧 Linux — recommended: add the package repo, updates included
 
 Self-contained packages (server + web UI + private runtime — no Python
 needed) from the **signed package repository**, so `apt upgrade` /
@@ -87,8 +67,8 @@ echo "deb [signed-by=/usr/share/keyrings/breeze-core.gpg] https://bolero.salatap
 sudo apt update && sudo apt install breeze-core
 ```
 
-(rpm, pacman, and apk repos are there too. Prefer a one-off download — or run
-Void/Gentoo/NixOS? → [docs/PACKAGES.md](docs/PACKAGES.md).)
+(rpm, pacman, apk, and a signed **OpenWrt opkg feed** are there too. Prefer a
+one-off download — or run Void/Gentoo/NixOS? → [docs/PACKAGES.md](docs/PACKAGES.md).)
 
 Then three commands:
 
@@ -100,21 +80,29 @@ sudo systemctl enable --now breeze-core      # start it (survives reboots)
 
 Open **`http://<BREEZE_HOST>:8420`**. Details, OpenRC/runit variants, and the packagers' corner → [docs/PACKAGES.md](docs/PACKAGES.md). Prefer a classic from-source install (venv + your own unit)? That's still first-class → [docs/INSTALL.md](docs/INSTALL.md).
 
-### 🍎 macOS
+### 🪟 Windows — just double-click an installer
+
+Download **`Breeze-Core-Setup.exe`** from the [latest release](https://github.com/monikapurpl3/breeze-core/releases/latest) and run it. It sets Breeze Core up as a background service and offers to find your units for you — no commands to type. Full walkthrough → [docs/WINDOWS.md](docs/WINDOWS.md).
+
+### 🐳 Docker — if you already run containers
+
+Prefer managing it with your existing container stack? The multi-arch image is on GHCR:
 
 ```bash
-brew install python git
+# 1. find your AC units and pair (this prints an access key once — copy it)
+docker run --rm -it --network host -v breeze:/etc/breeze-core \
+  ghcr.io/monikapurpl3/breeze-core:latest python setup_device.py
+
+# 2. leave it running
+docker run -d --name breeze --restart unless-stopped --network host \
+  -v breeze:/etc/breeze-core ghcr.io/monikapurpl3/breeze-core:latest
 ```
 
-…then the same three commands as Linux above. To keep it running in the background, see [the install guide → macOS](docs/INSTALL.md#macos).
+Then open **`http://<this-computer's-IP>:8420`**. Compose file, updates, and options → [docs/DOCKER.md](docs/DOCKER.md). (On a plain Linux box, the package repo above is simpler and updates itself with the system.)
 
-### 😈 FreeBSD / other BSD
+### 🍎 macOS · 😈 FreeBSD / other BSD
 
-```sh
-sudo pkg install python311 py311-pip git
-```
-
-…then the same three commands, and run it under `rc.d` — see [the install guide → BSD](docs/INSTALL.md#freebsd-and-other-bsds).
+No native packages for these (yet) — the from-source install works well: [macOS](docs/INSTALL.md#macos) (launchd) and [BSD](docs/INSTALL.md#freebsd-and-other-bsds) (rc.d) are covered step-by-step in the install guide.
 
 > **Want to reach it from outside your home** (over the internet, with HTTPS)? Get it working on your network first, then follow [REVERSE-PROXY.md](docs/REVERSE-PROXY.md) (Linux) or the built-in Caddy wizard on [Windows](docs/WINDOWS.md#5-expose-it-publicly-with-caddy) — and skim [HARDENING.md](HARDENING.md) before you do.
 
