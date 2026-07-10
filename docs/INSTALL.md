@@ -1,4 +1,10 @@
-# Installing Breeze Core
+# Installing Breeze Core (from source)
+
+> **Shortcut:** every release ships **prebuilt, self-contained packages**
+> (.deb / .rpm / .pkg.tar.zst / .apk / tarball — no Python needed, hardened
+> service included). If you just want it running, start at
+> **[PACKAGES.md](PACKAGES.md)**. This guide is the classic from-source
+> install for people who want to own every layer.
 
 This installs Breeze Core as a hardened **systemd service** on a Linux host on the same LAN as your Midea units. It's LAN-only by default; to reach it from outside your network, do this first, then follow [REVERSE-PROXY.md](REVERSE-PROXY.md).
 

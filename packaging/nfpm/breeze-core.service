@@ -1,0 +1,49 @@
+# Breeze Core — systemd unit installed by the deb/rpm/pacman packages.
+# Bind address/port come from /etc/breeze-core/breeze-core.env (BREEZE_HOST /
+# BREEZE_PORT / BREEZE_OPTS). Default is loopback-only — set BREEZE_HOST to
+# this machine's LAN IP for direct LAN use, or keep 127.0.0.1 behind a proxy.
+
+[Unit]
+Description=Breeze Core - self-hosted Midea AC control
+Documentation=https://github.com/monikapurpl3/breeze-core
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=breeze
+Group=breeze
+Environment=BREEZE_HOST=127.0.0.1
+Environment=BREEZE_PORT=8420
+Environment=BREEZE_OPTS=
+Environment=AC_CONFIG=/etc/breeze-core/config.json
+Environment=AC_DEVICES=/etc/breeze-core/devices.json
+Environment=AC_PROGRAMS=/etc/breeze-core/programs.json
+EnvironmentFile=-/etc/breeze-core/breeze-core.env
+ExecStart=/usr/lib/breeze-core/breeze-core serve --host ${BREEZE_HOST} --port ${BREEZE_PORT} $BREEZE_OPTS
+Restart=on-failure
+RestartSec=5
+
+# --- sandbox (same posture as the source install's unit) ---
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/etc/breeze-core
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RemoveIPC=true
+SystemCallFilter=@system-service
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+LockPersonality=true
+# Optional egress lockdown — uncomment and adjust to your LAN (HARDENING.md):
+#IPAddressAllow=127.0.0.0/8 ::1/128 192.168.0.0/16
+#IPAddressDeny=any
+
+[Install]
+WantedBy=multi-user.target

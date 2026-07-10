@@ -1,0 +1,11 @@
+#!/bin/sh
+# runit service for breeze-core (Void). Config: /etc/breeze-core/breeze-core.env
+BREEZE_HOST=127.0.0.1
+BREEZE_PORT=8420
+BREEZE_OPTS=""
+[ -r /etc/breeze-core/breeze-core.env ] && . /etc/breeze-core/breeze-core.env
+export AC_CONFIG=/etc/breeze-core/config.json
+export AC_DEVICES=/etc/breeze-core/devices.json
+export AC_PROGRAMS=/etc/breeze-core/programs.json
+exec chpst -u breeze:breeze /usr/lib/breeze-core/breeze-core \
+	serve --host "$BREEZE_HOST" --port "$BREEZE_PORT" $BREEZE_OPTS 2>&1

@@ -1,0 +1,31 @@
+# syntax=docker/dockerfile:1
+# Self-contained glibc bundle, built on AlmaLinux 8 (glibc 2.28) so the
+# result runs on any glibc distro from RHEL 8 / Debian 11 / Ubuntu 20.04
+# onward. Works for linux/amd64 and linux/arm64 (pick with --platform).
+#
+#   docker buildx build --platform linux/amd64 -f packaging/binary/Dockerfile.glibc \
+#     --build-arg AC_COMMIT=$(git rev-parse --short HEAD) \
+#     -o type=local,dest=packaging/out/bundle-glibc-amd64 .
+
+FROM almalinux:8 AS build
+
+RUN dnf install -y python3.12 python3.12-pip binutils && dnf clean all
+
+WORKDIR /src
+COPY requirements.txt .
+RUN python3.12 -m venv /venv \
+    && /venv/bin/pip install --no-cache-dir --upgrade pip \
+    && /venv/bin/pip install --no-cache-dir -r requirements.txt pyinstaller
+
+COPY meow_ac ./meow_ac
+COPY static ./static
+COPY setup_device.py ./
+COPY packaging/binary/launcher.py packaging/binary/breeze-core.spec ./
+
+ARG AC_COMMIT=dev
+RUN echo "$AC_COMMIT" > meow_ac/_commit.txt \
+    && /venv/bin/pyinstaller --clean --distpath dist breeze-core.spec \
+    && ./dist/breeze-core/breeze-core version
+
+FROM scratch AS export
+COPY --from=build /src/dist/breeze-core /breeze-core

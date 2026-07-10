@@ -37,7 +37,7 @@ Three components share one contract — the three `/api/*` endpoints — and are
 
 ## Commands
 
-There is no build step, test suite, or linter. This is a small deploy-by-scp project.
+There is no build step for the app itself (deploy-by-scp), but there IS a **package build pipeline** under `packaging/` (binary-first: 4 PyInstaller bundles glibc/musl × amd64/arm64 → nfpm-wrapped .deb/.rpm/.apk/.pkg.tar.zst + tarballs; see `packaging/README.md`). Run its three scripts from the repo root with Docker available: `packaging/binary/build-binaries.sh`, `packaging/nfpm/build-packages.sh`, `packaging/test/test-matrix.sh` (15-distro install test). CI (`packages.yml`) does the same on `v*` tags and attaches the artifacts to the release. Gotchas live in the scripts' comments (nfpm apk `type: tree` bug → per-file entries; `cp -RL` staging; Windows checkout loses exec bits — restored at packaging time). `flake.nix` at the root is a proper Nix source build + NixOS module; `packaging/source/` holds PKGBUILD/ebuild/xbps recipes for packagers.
 
 ```bash
 # Run the server locally, from the repo root (so meow_ac imports and static/ is found)

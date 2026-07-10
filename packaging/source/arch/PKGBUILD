@@ -1,0 +1,66 @@
+# Maintainer: monikapurpl3 <monikapurpl3@users.noreply.github.com>
+#
+# Source-build PKGBUILD (Arch/Manjaro/Artix) for people who prefer building
+# from source over the prebuilt `breeze-core` .pkg.tar.zst attached to the
+# GitHub releases (produced by nfpm from the self-contained bundle).
+#
+# The Python dependencies (msmart-ng, brotli-asgi, …) are not in the repos or
+# the AUR, so this builds a private venv — network access during build(), like
+# other venv-based AUR packages. Layout matches docs/INSTALL.md:
+# /opt/breeze-core with a venv, plus the same hardened systemd unit.
+
+pkgname=breeze-core-src
+_pkgname=breeze-core
+pkgver=2.5.0
+pkgrel=1
+pkgdesc="Self-hosted, LAN-first control for Midea air conditioners (built from source)"
+arch=('x86_64' 'aarch64')
+url="https://github.com/monikapurpl3/breeze-core"
+license=('AGPL-3.0-or-later')
+depends=('python')
+makedepends=('python')
+provides=('breeze-core')
+conflicts=('breeze-core')
+backup=('etc/breeze-core/breeze-core.env')
+source=("$_pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('SKIP')  # pin after the release: curl -L <url> | sha256sum
+
+_appdir=/opt/breeze-core
+
+build() {
+  cd "$_pkgname-$pkgver"
+  python -m venv --copies "$srcdir/venv"
+  "$srcdir/venv/bin/pip" install --upgrade pip
+  "$srcdir/venv/bin/pip" install -r requirements.txt
+}
+
+package() {
+  cd "$_pkgname-$pkgver"
+
+  # App tree + venv (venv re-pointed from $srcdir to the install path).
+  install -d "$pkgdir$_appdir"
+  cp -r meow_ac static setup_device.py requirements.txt "$pkgdir$_appdir/"
+  cp -r "$srcdir/venv" "$pkgdir$_appdir/venv"
+  sed -i "s|$srcdir/venv|$_appdir/venv|g" \
+    "$pkgdir$_appdir"/venv/bin/* "$pkgdir$_appdir/venv/pyvenv.cfg" 2>/dev/null || true
+
+  # Same env-file-driven unit the binary packages use, adapted to the venv.
+  install -Dm644 packaging/nfpm/breeze-core.service \
+    "$pkgdir/usr/lib/systemd/system/breeze-core.service"
+  sed -i \
+    -e "s|^ExecStart=.*|ExecStart=$_appdir/venv/bin/uvicorn meow_ac.app:app --host \${BREEZE_HOST} --port \${BREEZE_PORT}|" \
+    -e "/^\[Service\]/a WorkingDirectory=$_appdir" \
+    "$pkgdir/usr/lib/systemd/system/breeze-core.service"
+
+  # Service account + state dir, the systemd-native way.
+  install -Dm644 /dev/stdin "$pkgdir/usr/lib/sysusers.d/breeze-core.conf" <<'EOF'
+u breeze - "Breeze Core" /etc/breeze-core /usr/bin/nologin
+EOF
+  install -Dm644 /dev/stdin "$pkgdir/usr/lib/tmpfiles.d/breeze-core.conf" <<'EOF'
+d /etc/breeze-core 0750 breeze breeze -
+EOF
+
+  install -Dm640 packaging/nfpm/breeze-core.env "$pkgdir/etc/breeze-core/breeze-core.env"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/$_pkgname/README.md"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$_pkgname/LICENSE"
+}

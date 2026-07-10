@@ -22,3 +22,6 @@ programs.json
 
 # Build stamp written at package/deploy time (not committed)
 meow_ac/_commit.txt
+
+# Package build artifacts (bundles, packages)
+packaging/out/

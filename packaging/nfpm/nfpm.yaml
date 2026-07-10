@@ -1,0 +1,83 @@
+# nfpm config — one file produces the .deb, .rpm, .pkg.tar.zst and .apk from
+# a staged self-contained bundle (see build-packages.sh, which sets the env
+# vars and normalizes file modes before invoking nfpm).
+#
+#   BC_VERSION  package version (e.g. 2.5.0)
+#   BC_ARCH     amd64 | arm64  (nfpm translates per packager: x86_64/aarch64…)
+# The normalized bundle is always staged at /stage/breeze-core (env vars are
+# not expanded in content src fields, so the path is fixed by contract).
+
+name: breeze-core
+arch: ${BC_ARCH}
+platform: linux
+version: ${BC_VERSION}
+section: utils
+priority: optional
+maintainer: monikapurpl3 <monikapurpl3@users.noreply.github.com>
+vendor: Breeze Core
+homepage: https://github.com/monikapurpl3/breeze-core
+license: AGPL-3.0-or-later
+description: |
+  Self-hosted, LAN-first control for Midea air conditioners.
+  REST API + web control panel with device-pairing authentication, server-side
+  schedules and temperature curves. Self-contained build - no Python required.
+
+contents:
+  # The self-contained bundle (modes normalized by build-packages.sh).
+  # For apk, package-one.sh replaces this block with generated per-file
+  # entries: nfpm 2.47's apk packager emits an invalid archive for ANY
+  # `type: tree` ("package file format error" on apk-tools 2.14).
+  # Upstream: https://github.com/goreleaser/nfpm/issues/1112
+  # BEGIN-BUNDLE-TREE
+  - src: /stage/breeze-core
+    dst: /usr/lib/breeze-core
+    type: tree
+  # END-BUNDLE-TREE
+
+  - src: /usr/lib/breeze-core/breeze-core
+    dst: /usr/bin/breeze-core
+    type: symlink
+
+  # Service definitions: systemd for deb/rpm/pacman, OpenRC for Alpine.
+  - src: packaging/nfpm/breeze-core.service
+    dst: /usr/lib/systemd/system/breeze-core.service
+    packager: deb
+  - src: packaging/nfpm/breeze-core.service
+    dst: /usr/lib/systemd/system/breeze-core.service
+    packager: rpm
+  - src: packaging/nfpm/breeze-core.service
+    dst: /usr/lib/systemd/system/breeze-core.service
+    packager: archlinux
+  - src: packaging/nfpm/breeze-core.initd
+    dst: /etc/init.d/breeze-core
+    packager: apk
+    file_info:
+      mode: 0755
+
+  # State dir + editable service config (kept on upgrade/remove).
+  - dst: /etc/breeze-core
+    type: dir
+    file_info:
+      mode: 0750
+      owner: breeze
+      group: breeze
+  - src: packaging/nfpm/breeze-core.env
+    dst: /etc/breeze-core/breeze-core.env
+    type: config|noreplace
+    file_info:
+      mode: 0640
+      owner: root
+      group: breeze
+
+  - src: README.md
+    dst: /usr/share/doc/breeze-core/README.md
+  - src: HARDENING.md
+    dst: /usr/share/doc/breeze-core/HARDENING.md
+  - src: LICENSE
+    dst: /usr/share/doc/breeze-core/LICENSE
+
+scripts:
+  preinstall: packaging/nfpm/scripts/preinstall.sh
+  postinstall: packaging/nfpm/scripts/postinstall.sh
+  preremove: packaging/nfpm/scripts/preremove.sh
+  postremove: packaging/nfpm/scripts/postremove.sh

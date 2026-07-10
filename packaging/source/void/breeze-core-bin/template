@@ -1,0 +1,42 @@
+# Template file for 'breeze-core-bin' (void-packages srcpkgs/breeze-core-bin/template)
+# Wraps the prebuilt self-contained bundle from the GitHub release; the
+# matching libc variant (glibc/musl) is picked by XBPS_TARGET_MACHINE.
+pkgname=breeze-core-bin
+version=2.5.0
+revision=1
+archs="x86_64 x86_64-musl aarch64 aarch64-musl"
+short_desc="Self-hosted, LAN-first control for Midea air conditioners"
+maintainer="monikapurpl3 <monikapurpl3@users.noreply.github.com>"
+license="AGPL-3.0-or-later"
+homepage="https://github.com/monikapurpl3/breeze-core"
+repository=nonfree           # prebuilt binary, not built from source
+nostrip=yes                  # PyInstaller bootloader must not be re-stripped
+noshlibprovides=yes
+system_accounts="breeze"
+breeze_homedir="/etc/breeze-core"
+conf_files="/etc/breeze-core/breeze-core.env"
+make_dirs="/etc/breeze-core 0750 breeze breeze"
+provides="breeze-core-${version}_${revision}"
+
+case "$XBPS_TARGET_MACHINE" in
+	x86_64)       _libc=glibc; _arch=amd64 ;;
+	x86_64-musl)  _libc=musl;  _arch=amd64 ;;
+	aarch64)      _libc=glibc; _arch=arm64 ;;
+	aarch64-musl) _libc=musl;  _arch=arm64 ;;
+esac
+distfiles="${homepage}/releases/download/v${version}/breeze-core-${version}-linux-${_libc}-${_arch}.tar.gz"
+# Fill per-arch checksums after the release (xgensum -a <arch> breeze-core-bin):
+checksum=@SKIP@
+
+do_install() {
+	local d="breeze-core-${version}-linux-${_libc}-${_arch}"
+	vmkdir usr/lib/breeze-core
+	vcopy "${d}/breeze-core/*" usr/lib/breeze-core
+	chmod 755 "${DESTDIR}/usr/lib/breeze-core/breeze-core"
+	ln -sf ../lib/breeze-core/breeze-core "${DESTDIR}/usr/bin/breeze-core"
+
+	vinstall "${d}/breeze-core.env" 640 etc/breeze-core
+	vsv breeze-core          # runit service from files/breeze-core/
+	vdoc "${d}/README.md"
+	vlicense "${d}/LICENSE"
+}

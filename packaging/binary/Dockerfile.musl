@@ -1,0 +1,32 @@
+# syntax=docker/dockerfile:1
+# Self-contained musl bundle for Alpine / Void-musl, built on Alpine 3.20
+# (python 3.12; deps come as musllinux wheels — no compiler needed).
+# Works for linux/amd64 and linux/arm64 (pick with --platform).
+#
+#   docker buildx build --platform linux/amd64 -f packaging/binary/Dockerfile.musl \
+#     --build-arg AC_COMMIT=$(git rev-parse --short HEAD) \
+#     -o type=local,dest=packaging/out/bundle-musl-amd64 .
+
+FROM alpine:3.20 AS build
+
+# binutils: PyInstaller needs objdump/objcopy to assemble the bundle.
+RUN apk add --no-cache python3 py3-pip binutils
+
+WORKDIR /src
+COPY requirements.txt .
+RUN python3 -m venv /venv \
+    && /venv/bin/pip install --no-cache-dir --upgrade pip \
+    && /venv/bin/pip install --no-cache-dir -r requirements.txt pyinstaller
+
+COPY meow_ac ./meow_ac
+COPY static ./static
+COPY setup_device.py ./
+COPY packaging/binary/launcher.py packaging/binary/breeze-core.spec ./
+
+ARG AC_COMMIT=dev
+RUN echo "$AC_COMMIT" > meow_ac/_commit.txt \
+    && /venv/bin/pyinstaller --clean --distpath dist breeze-core.spec \
+    && ./dist/breeze-core/breeze-core version
+
+FROM scratch AS export
+COPY --from=build /src/dist/breeze-core /breeze-core

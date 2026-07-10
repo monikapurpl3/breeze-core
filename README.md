@@ -70,29 +70,30 @@ Then open **`http://<this-computer's-IP>:8420`** in a browser. Compose file, upd
 
 Download **`Breeze-Core-Setup.exe`** from the [latest release](https://github.com/monikapurpl3/breeze-core/releases/latest) and run it. It sets Breeze Core up as a background service and offers to find your units for you — no commands to type. Full walkthrough → [docs/WINDOWS.md](docs/WINDOWS.md).
 
-### 🐧 Linux — three short steps
+### 🐧 Linux — install a package, no Python needed
 
-First, a one-time install of Python using your system's line:
+Each release ships **self-contained packages** (server + web UI + private
+runtime in one — nothing else to install). Download yours from the
+[latest release](https://github.com/monikapurpl3/breeze-core/releases/latest):
 
-| Your system | One-time setup |
-|---|---|
-| Fedora · RHEL · AlmaLinux · Rocky | `sudo dnf install -y python3 python3-pip git` |
-| Debian · Ubuntu · Raspberry Pi OS · Mint | `sudo apt install -y python3 python3-venv python3-pip git` |
-| openSUSE · SLES | `sudo zypper install -y python3 python3-pip git` |
-| Arch · Manjaro | `sudo pacman -S --needed python git` |
-| Alpine | `sudo apk add python3 py3-pip git` |
-| NixOS | it's declarative — use the recipe in [the install guide](docs/INSTALL.md#nixos-declarative) |
+| Your system | Package | Install |
+|---|---|---|
+| Debian · Ubuntu · Mint · Pop!_OS · Raspberry Pi OS · Armbian · Devuan | `….deb` (`amd64`/`arm64`) | `sudo apt install ./breeze-core_*.deb` |
+| Fedora · RHEL · AlmaLinux · Rocky · openSUSE · SLE | `….rpm` | `sudo dnf install ./breeze-core-*.rpm` (or `zypper in --allow-unsigned-rpm`) |
+| Arch · Manjaro · Artix | `….pkg.tar.zst` | `sudo pacman -U breeze-core-*.pkg.tar.zst` |
+| Alpine | `….apk` | `sudo apk add --allow-untrusted ./breeze-core_*.apk` |
+| Void · Gentoo · anything else | `….tar.gz` (glibc or musl) | unpack, `sudo ./install.sh` |
+| NixOS | it's a flake | `services.breeze-core.enable = true;` — see [docs/PACKAGES.md](docs/PACKAGES.md#nixos--nix) |
 
-Then, in a folder of your choice:
+Then three commands:
 
 ```bash
-git clone https://github.com/monikapurpl3/breeze-core && cd breeze-core
-python3 -m venv venv && ./venv/bin/pip install -r requirements.txt
-./venv/bin/python setup_device.py                              # finds units, prints the key once
-./venv/bin/uvicorn meow_ac.app:app --host 0.0.0.0 --port 8420  # start it
+sudo breeze-core pair                        # finds your units, writes the config
+sudoedit /etc/breeze-core/breeze-core.env    # set BREEZE_HOST=<this machine's LAN IP>
+sudo systemctl enable --now breeze-core      # start it (survives reboots)
 ```
 
-Open **`http://<this-computer's-IP>:8420`**. To have it start automatically on every boot (recommended), the [install guide](docs/INSTALL.md) turns this into a proper always-on service in a few more minutes — with exact steps per distro, including systems without systemd.
+Open **`http://<BREEZE_HOST>:8420`**. Details, OpenRC/runit variants, and the packagers' corner → [docs/PACKAGES.md](docs/PACKAGES.md). Prefer a classic from-source install (venv + your own unit)? That's still first-class → [docs/INSTALL.md](docs/INSTALL.md).
 
 ### 🍎 macOS
 
@@ -151,7 +152,8 @@ Inside the package, work is split into small layers assembled by an app factory 
 
 ## Detailed guides
 
-- **[docs/INSTALL.md](docs/INSTALL.md)** — step-by-step install as a service, with separate instructions for **RHEL & compatibles**, **Debian & compatibles**, **openSUSE/SLES**, **NixOS/Nix**, and **other** distros, plus first-class paths for **non-systemd inits** (OpenRC, runit, s6, supervisord, SysV), **non-glibc / musl** systems (Alpine, Void-musl), and the **BSDs / macOS** — including the distro-specific extras that help (SELinux, AppArmor, firewalld/ufw/nftables, declarative NixOS).
+- **[docs/PACKAGES.md](docs/PACKAGES.md)** — install from the **prebuilt, self-contained packages** (.deb/.rpm/.pkg.tar.zst/.apk/tarball + Nix flake): no Python required, hardened service units included, every package install-tested in CI on 15 distro userlands.
+- **[docs/INSTALL.md](docs/INSTALL.md)** — the classic from-source install as a service, with separate instructions for **RHEL & compatibles**, **Debian & compatibles**, **openSUSE/SLES**, **NixOS/Nix**, and **other** distros, plus first-class paths for **non-systemd inits** (OpenRC, runit, s6, supervisord, SysV), **non-glibc / musl** systems (Alpine, Void-musl), and the **BSDs / macOS** — including the distro-specific extras that help (SELinux, AppArmor, firewalld/ufw/nftables, declarative NixOS).
 - **[docs/WINDOWS.md](docs/WINDOWS.md)** — Windows as a first-class target: a guided **NSIS installer**, Breeze Core as a hardened Windows **service** (bundled NSSM, `LOCAL SERVICE`, LAN-locked firewall), an optional guided **Caddy** reverse proxy (automatic HTTPS), and a **fail2ban-style** IP banner. Scripts live in [`deploy/windows/`](deploy/windows/).
 - **[docs/REVERSE-PROXY.md](docs/REVERSE-PROXY.md)** — exposing Breeze Core beyond the LAN: **nginx** and **Apache** configs (separately), **TLS certificates** (Let's Encrypt via certbot and via acme.sh), and the app-side settings that make it safe behind a proxy. For automation, [`deploy/reverse-proxy-wizard.sh`](deploy/reverse-proxy-wizard.sh) generates and installs it (with a `--dry-run`); on **Windows** the [Caddy wizard](docs/WINDOWS.md#5-expose-it-publicly-with-caddy) does the equivalent.
 - **[docs/DOCKER.md](docs/DOCKER.md)** — run Breeze Core as a container: a compact, non-root image on Red Hat **UBI 9** (multi-arch, published to GHCR), with a Compose example.
@@ -297,9 +299,18 @@ A **program** targets units (`unit_ids`, empty = all) and is one `kind`:
 
 Both are self-contained zsh scripts that speak only HTTP (they never import the package). They read `config.json` for the key.
 
+`ac-diag.zsh` checks, in one run: connectivity (`/api/health`), **server version + build commit + advertised features** (`/api/version`), the auth posture (rejects no-key/wrong-key, and detects whether the control API is token-gated), **paired devices** with expiry warnings, **config secret-sanitisation** (asserts `/api/config` leaks no key/token), the **batch-state** endpoint, **input-validation** (unknown-unit → 404, out-of-range control → 422), per-unit state/latency/enum checks, and the **scheduler + programs** status.
+
+Because control/config/programs routes need a **device token** as well as the key, the tool obtains one automatically: it self-enrols on the LAN (start → approve → poll, all key-authenticated) and caches the token under `~/.config/ac-diag/` — or pass `--token`, set `$AC_DIAG_TOKEN`, or `--pair` to re-mint. The minted token shows up as `ac-diag` in `ac-approve list` and is revocable.
+
 ```bash
-# health/latency/enum checks on every unit
+# full read-only diagnostic on every unit (self-pairs on the LAN if needed)
 ./tools/ac-diag.zsh --base-url http://<host>:8420 --config /etc/breeze-core/config.json --auto
+
+# just one unit (by id or name), or an interactive menu with no args
+./tools/ac-diag.zsh --unit "Living Room"
+./tools/ac-diag.zsh --token <DEVICE_TOKEN>     # use a token you already have
+./tools/ac-diag.zsh --forget-token             # drop the cached token
 
 # approve a pairing code / list / revoke (run on the LAN)
 ./tools/ac-approve.zsh --base-url http://<host>:8420 --config /etc/breeze-core/config.json approve <CODE>
