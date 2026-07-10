@@ -60,6 +60,28 @@ sudo chown -R breeze:breeze /etc/breeze-core
 sudo chmod 750 /etc/breeze-core && sudo chmod 640 /etc/breeze-core/config.json
 ```
 
+### Pairing/approval returns 500 on RHEL/Fedora/Alma (SELinux) — reads work, writes don't
+
+If the packaged service can *read* its config but every write to
+`/etc/breeze-core` (approving a pairing, saving programs) dies with a
+`PermissionError` — and there's no AVC in the audit log — check the service's
+SELinux domain:
+
+```bash
+ps -o label= -p "$(systemctl show breeze-core -p MainPID --value)"
+```
+
+If it says `init_t` instead of `unconfined_service_t`, the executable under
+`/usr/lib/breeze-core/` is labeled `lib_t`, which is not a domain-transition
+entrypoint (denials from `init_t` are *dontaudit*'d — hence the silence).
+Packages since **2.6.1** fix this in their post-install; on an older install:
+
+```bash
+sudo semanage fcontext -a -t bin_t "/usr/lib/breeze-core/breeze-core"
+sudo restorecon /usr/lib/breeze-core/breeze-core
+sudo systemctl restart breeze-core
+```
+
 ### Every request gets 401
 
 The per-device token is missing or expired (separate from the API key).

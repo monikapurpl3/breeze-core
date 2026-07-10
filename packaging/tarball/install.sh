@@ -82,6 +82,18 @@ chown breeze:breeze "$ETCDIR"
 chmod 750 "$ETCDIR"
 chown root:breeze "$ETCDIR/breeze-core.env"; chmod 640 "$ETCDIR/breeze-core.env"
 
+# SELinux: /usr/lib is lib_t (not an entrypoint) — without bin_t the service
+# runs as init_t and gets silent write denials on /etc/breeze-core.
+if command -v selinuxenabled >/dev/null 2>&1 && selinuxenabled 2>/dev/null; then
+    if command -v semanage >/dev/null 2>&1; then
+        semanage fcontext -a -t bin_t "$LIBDIR/breeze-core" 2>/dev/null \
+            || semanage fcontext -m -t bin_t "$LIBDIR/breeze-core" 2>/dev/null || true
+        restorecon "$LIBDIR/breeze-core" 2>/dev/null || true
+    else
+        chcon -t bin_t "$LIBDIR/breeze-core" 2>/dev/null || true
+    fi
+fi
+
 "$BINLINK" version || die "installed binary failed to run"
 
 # --- service ----------------------------------------------------------------
