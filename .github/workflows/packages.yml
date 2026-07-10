@@ -7,6 +7,11 @@ on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Existing release tag to attach the artifacts to (optional)"
+        required: false
+        default: ""
 
 permissions:
   contents: write   # upload release assets
@@ -19,29 +24,39 @@ jobs:
       - uses: docker/setup-qemu-action@v3     # arm64 bundles build under QEMU
       - uses: docker/setup-buildx-action@v3
 
+      # Scripts run via `bash` so a checkout without exec bits still works.
       - name: Build self-contained bundles (glibc/musl x amd64/arm64)
-        run: ./packaging/binary/build-binaries.sh
+        run: bash ./packaging/binary/build-binaries.sh
 
       - name: Package (deb/rpm/apk/pacman + tarballs)
-        run: ./packaging/nfpm/build-packages.sh
+        run: bash ./packaging/nfpm/build-packages.sh
 
       - name: Install-test subset (debian, leap, arch, alpine, void, gentoo)
-        run: ./packaging/test/test-matrix.sh debian leap arch alpine void gentoo
+        run: bash ./packaging/test/test-matrix.sh debian leap arch alpine void gentoo
 
-      - name: Upload artifacts (non-tag runs)
-        if: startsWith(github.ref, 'refs/tags/') == false
+      - name: Resolve target release
+        id: rel
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            echo "tag=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ github.event.inputs.release_tag }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload artifacts (no target release)
+        if: steps.rel.outputs.tag == ''
         uses: actions/upload-artifact@v4
         with:
           name: packages
           path: packaging/out/pkg/*
           retention-days: 7
 
-      - name: Attach to release (tag runs)
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Attach to release
+        if: steps.rel.outputs.tag != ''
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.rel.outputs.tag }}
         run: |
-          # The release is created by the maintainer (or here if absent).
-          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 \
-            || gh release create "$GITHUB_REF_NAME" --title "Breeze Core $GITHUB_REF_NAME" --generate-notes
-          gh release upload "$GITHUB_REF_NAME" packaging/out/pkg/* --clobber
+          gh release view "$TAG" >/dev/null 2>&1 \
+            || gh release create "$TAG" --title "Breeze Core $TAG" --generate-notes
+          gh release upload "$TAG" packaging/out/pkg/* --clobber
