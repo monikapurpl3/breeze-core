@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Breeze Core package repository</title>
+<style>
+  body{margin:0;background:#0a0c0f;color:#e4e7eb;font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding:40px 20px}
+  main{max-width:860px;margin:0 auto}
+  h1{font-size:24px;letter-spacing:-.02em}
+  h2{font-size:17px;margin-top:34px;border-bottom:1px solid #262b33;padding-bottom:6px}
+  code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px}
+  pre{background:#14171c;border:1px solid #262b33;border-radius:10px;padding:14px;overflow-x:auto}
+  a{color:#4fd1c5;text-decoration:none} a:hover{text-decoration:underline}
+  .muted{color:#8b93a0;font-size:13px}
+</style>
+</head>
+<body>
+<main>
+  <h1>Breeze Core package repository</h1>
+  <p>Signed packages for <a href="https://github.com/monikapurpl3/breeze-core">Breeze Core</a> —
+  self-hosted, LAN-first control for Midea air conditioners. Current version: <strong>@VERSION@</strong>.
+  Add the repo once; updates then arrive through your normal package manager.</p>
+  <p class="muted">Everything here is built and signed offline, then published as static files —
+  this server holds no signing keys. Verify against the keys below. amd64/x86_64 and arm64/aarch64.</p>
+
+  <h2>Debian · Ubuntu · Mint · Pop!_OS · Raspberry Pi OS · Devuan</h2>
+  <pre>curl -fsSL https://bolero.salataputarica.hr.eu.org/breeze-core.asc \
+  | sudo gpg --dearmor -o /usr/share/keyrings/breeze-core.gpg
+echo "deb [signed-by=/usr/share/keyrings/breeze-core.gpg] https://bolero.salataputarica.hr.eu.org/deb stable main" \
+  | sudo tee /etc/apt/sources.list.d/breeze-core.list
+sudo apt update && sudo apt install breeze-core</pre>
+
+  <h2>Fedora · RHEL · AlmaLinux · Rocky · openSUSE · SLE</h2>
+  <pre>sudo tee /etc/yum.repos.d/breeze-core.repo &lt;&lt;'EOF'
+[breeze-core]
+name=Breeze Core
+baseurl=https://bolero.salataputarica.hr.eu.org/rpm/$basearch/
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=https://bolero.salataputarica.hr.eu.org/breeze-core.asc
+EOF
+sudo dnf install breeze-core            # openSUSE: sudo zypper ref &amp;&amp; sudo zypper in breeze-core</pre>
+
+  <h2>Arch · Manjaro · Artix</h2>
+  <pre>curl -fsSL https://bolero.salataputarica.hr.eu.org/breeze-core.asc | sudo pacman-key --add -
+sudo pacman-key --lsign-key "$(gpg --show-keys --with-colons \
+  <(curl -fsSL https://bolero.salataputarica.hr.eu.org/breeze-core.asc) | awk -F: '/^fpr/{print $10; exit}')"
+sudo tee -a /etc/pacman.conf &lt;&lt;'EOF'
+
+[breeze-core]
+SigLevel = Required
+Server = https://bolero.salataputarica.hr.eu.org/arch/$arch
+EOF
+sudo pacman -Sy breeze-core</pre>
+
+  <h2>Alpine</h2>
+  <pre>sudo curl -fsSL -o /etc/apk/keys/breeze-core@bolero.rsa.pub \
+  https://bolero.salataputarica.hr.eu.org/alpine/breeze-core@bolero.rsa.pub
+echo "https://bolero.salataputarica.hr.eu.org/alpine" | sudo tee -a /etc/apk/repositories
+sudo apk update && sudo apk add breeze-core</pre>
+
+  <h2>After installing (any distro)</h2>
+  <pre>sudo breeze-core pair                        # find your ACs, write the config
+sudoedit /etc/breeze-core/breeze-core.env    # BREEZE_HOST=&lt;this machine's LAN IP&gt;
+sudo systemctl enable --now breeze-core      # OpenRC: rc-update add breeze-core default</pre>
+
+  <p class="muted">Keys: <a href="/breeze-core.asc">GPG (apt/dnf/pacman)</a> ·
+  <a href="/alpine/breeze-core@bolero.rsa.pub">RSA (apk)</a>.
+  Void/Gentoo/other → <a href="https://github.com/monikapurpl3/breeze-core/blob/main/docs/PACKAGES.md">tarballs on GitHub releases</a>.
+  Browse: <a href="/deb/">deb</a> · <a href="/rpm/">rpm</a> · <a href="/arch/">arch</a> · <a href="/alpine/">alpine</a>.</p>
+</main>
+</body>
+</html>

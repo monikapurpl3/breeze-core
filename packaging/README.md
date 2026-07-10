@@ -25,6 +25,8 @@ Local workflow (workstation, Docker Desktop):
 ./packaging/binary/build-binaries.sh     # 4 bundles  -> packaging/out/bundle-*
 ./packaging/nfpm/build-packages.sh       # 12 artifacts -> packaging/out/pkg/
 ./packaging/test/test-matrix.sh          # 15-target install-test matrix
+./packaging/repo/build-repo.sh           # signed apt/rpm/pacman/apk repo tree
+./packaging/repo/publish.sh              # push to the package host (atomic swap)
 ```
 
 CI (`.github/workflows/packages.yml`) runs the same three scripts on `v*` tags

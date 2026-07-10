@@ -2,7 +2,23 @@
 
 Every release ships **self-contained builds** — the server, its web UI, and a
 private Python runtime in one bundle, wrapped as native packages. Nothing to
-compile, no Python to install, no venv. Grab yours from the
+compile, no Python to install, no venv.
+
+## The package repository (recommended)
+
+Add the signed repo at **https://bolero.salataputarica.hr.eu.org** once, and
+installs *and updates* flow through your normal package manager
+(`apt upgrade`, `dnf upgrade`, `pacman -Syu`, `apk upgrade`). Copy-paste
+setup for each family is on the [repo landing
+page](https://bolero.salataputarica.hr.eu.org); the same commands are
+summarized in the README's Get started. Integrity model: the repo is built
+and signed offline (apt `InRelease`, signed rpms + `repo_gpgcheck`, pacman
+`SigLevel = Required`, RSA-signed `APKINDEX`) — the web host serves static
+files only and holds no keys.
+
+## Manual download (GitHub releases)
+
+Prefer a one-off file? Grab it from the
 [latest release](https://github.com/monikapurpl3/breeze-core/releases).
 
 After any of the installs below, the same three steps finish the job:

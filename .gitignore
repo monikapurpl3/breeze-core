@@ -25,3 +25,6 @@ meow_ac/_commit.txt
 
 # Package build artifacts (bundles, packages)
 packaging/out/
+
+# Package-repo signing keys — NEVER commit; back up offline
+packaging/repo/keys/
