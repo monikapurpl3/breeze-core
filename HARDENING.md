@@ -50,6 +50,7 @@ Environment=AC_BEHIND_PROXY=1                 # trust X-Forwarded-For from the l
 Environment=AC_TRUSTED_HOSTS=breeze.example.com,127.0.0.1,localhost
 Environment=AC_ENROLL_LAN_ONLY=1              # approvals only from a private/LAN address (default)
 Environment=AC_TOKEN_TTL_DAYS=90              # device tokens expire; lower = tighter
+# AC_MIN_AUTH_VERSION=2                        # once clients are on v2, refuse legacy v1 (426)
 # leave AC_DOCS unset so docs stay disabled
 ExecStart=… uvicorn meow_ac.app:app --host 127.0.0.1 --port 8420 --proxy-headers --forwarded-allow-ips 127.0.0.1
 ```
@@ -127,10 +128,13 @@ The unit in [INSTALL.md §5](docs/INSTALL.md#5-install-the-systemd-service) alre
 
 - **Enrollment key** (`api_key`): authorizes only *starting* enrollment — leaking it doesn't hand over the units.
 - **Device pairing:** single-use ~60 s code, hashed and rate-limited, approved by an **admin on the LAN**.
-- **Per-device token:** 256-bit, stored **hashed** (SHA-256), named, revocable, expiring; required *together with* the API key for all control.
+- **Per-device credential** (required *together with* the API key for all control), named, revocable, expiring, in two profiles:
+  - **v2 — Ed25519 request signing (recommended).** The server stores **only the public key**; each request is signed over method+path+timestamp+nonce+`SHA3-512(body)`. The secret never rides the wire, requests can't be replayed (nonce + ±60 s skew) or tampered, and **a `devices.json` leak exposes nothing forgeable** — the strongest posture.
+  - **v1 — bearer token.** 256-bit, stored **hashed** (SHA-256). Still supported; the secret is sent on every request (TLS-protected).
+- **Rollout clamp:** `AC_MIN_AUTH_VERSION` (default `1`) accepts both and nudges v1 clients (`X-Breeze-Upgrade` header); set it to `2` to refuse v1 with `426` once clients are updated. Enrolled v1 devices upgrade to v2 in place (`POST /api/auth/upgrade`) with no re-pairing.
 - **Revocation:** `ac-approve.zsh revoke <token_id>` (or `DELETE /api/auth/devices/{id}`) kills one device instantly.
 
-Residual, by design: a **stolen device token** is valid until it expires or is revoked — lower `AC_TOKEN_TTL_DAYS` and revoke lost devices. The Breeze app stores its token in Keystore-backed encrypted storage with `allowBackup=false`.
+Residual, by design: a **stolen v1 bearer token** is valid until it expires or is revoked — prefer v2 (nothing reusable is transmitted or stored), lower `AC_TOKEN_TTL_DAYS`, and revoke lost devices. The Breeze app keeps its v2 private key in Keystore-backed encrypted storage with `allowBackup=false`. Note the bundled **web UI and CLIs are still v1** — migrate them before raising the clamp to `2`.
 
 ---
 

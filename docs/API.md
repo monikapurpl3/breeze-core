@@ -54,6 +54,7 @@ headers on, LAN-only approval).
 | `AC_ENROLL_LAN_ONLY` | on | pairing approval must come from a private/LAN address |
 | `AC_CODE_TTL` | `60` | pairing-code lifetime (seconds) |
 | `AC_TOKEN_TTL_DAYS` | `90` | device-token lifetime; `0` = never expires |
+| `AC_MIN_AUTH_VERSION` | `1` | minimum device auth-version accepted (see [Authentication](#authentication-device-pairing)). `1` = accept legacy bearer **and** Ed25519 v2; `2` = refuse v1 with 426 |
 
 > Point them at your chosen config dir, e.g.
 > `AC_CONFIG=/etc/breeze-core/config.json` — `AC_DEVICES`/`AC_PROGRAMS` then
@@ -73,15 +74,66 @@ shared password rides on every request:
    short, single-use **code** (~60 s).
 3. An **admin on the LAN** approves that code (via `tools/ac-approve.zsh` or
    `POST /api/auth/enroll/approve`).
-4. The client polls `/api/auth/enroll/poll` and receives a **per-device
-   token** — 256-bit, stored **hashed**, individually named, revocable, and
-   expiring.
-5. **Control endpoints require the API key *and* a valid device token.**
+4. The client polls `/api/auth/enroll/poll` and is bound to a **per-device
+   credential** — individually named, revocable, and expiring.
+5. **Control endpoints require the API key *and* a valid device credential.**
    Approval and device management are admin-only and restricted to the local
    network.
 
-Rotating the `api_key` doesn't log devices out (tokens are independent);
-revoke a single lost device with `ac-approve.zsh revoke <token_id>`.
+Rotating the `api_key` doesn't log devices out (device credentials are
+independent); revoke a single lost device with
+`ac-approve.zsh revoke <token_id>`.
+
+### Auth versions (the device credential)
+
+A device is pinned to the credential profile it enrolled with. The server
+advertises which it supports in `GET /api/version`
+(`auth_versions`, `min_auth_version`).
+
+**v2 — Ed25519 request signing (current, recommended).** The client generates
+an Ed25519 keypair; the private key never leaves the device and the server
+stores **only the public key** — so a `devices.json` leak yields nothing an
+attacker can use. Each request is signed over a canonical string binding the
+method, path, timestamp, a single-use nonce, and a **SHA3-512 digest of the
+body**, sent as headers:
+
+```
+X-Breeze-Auth-Version: 2
+X-Breeze-Key-Id:       <token_id>            # names the device (not secret)
+X-Breeze-Timestamp:    <unix seconds>        # must be within ±60 s of the server
+X-Breeze-Nonce:        <base64url, 16 bytes> # single-use within the window
+X-Breeze-Signature:    <base64url Ed25519 sig>
+#   signed message =
+#   "breeze-auth-v2\n{METHOD}\n{path?query}\n{timestamp}\n{nonce}\n{sha3_512(body) hex}"
+```
+
+The timestamp + nonce give replay protection; the body digest gives tamper
+protection. At enrollment (`auth_version: 2`) the client sends its
+`public_key` in `enroll/start`; nothing secret is ever returned by `poll`.
+
+**v1 — bearer token (legacy).** `Authorization: Bearer <token>`; the token is
+256-bit random, shown once at enrollment, and stored only as a SHA-256 hash.
+Still fully supported.
+
+### Rollout and in-place upgrade
+
+`AC_MIN_AUTH_VERSION` (default `1`) is the clamp. At `1`, v1 and v2 devices
+both work and v1-authenticated responses carry an advisory
+`X-Breeze-Upgrade: auth-version=2` header. Raise it to `2` once your clients
+are updated: v1 requests are then refused with **`426 Upgrade Required`** and
+a human-readable message (which even an un-updated client surfaces to the
+user).
+
+An enrolled v1 device upgrades to v2 **in place** — `POST /api/auth/upgrade`,
+authenticated by its *existing* credential, registers a freshly-generated
+public key and keeps the same `token_id`. No re-pairing and no admin
+re-approval (it re-keys a device that already proved possession, trusting
+nobody new). The Breeze app does this automatically on first launch after an
+update.
+
+> The bundled web UI and the diagnostic CLIs remain **v1 clients** for now;
+> they keep working while `AC_MIN_AUTH_VERSION=1` (the default). Migrate them
+> before raising the clamp to `2`.
 
 ---
 
@@ -96,9 +148,13 @@ comparisons are constant-time. Responses are compressed with **brotli**
 
 ```
 POST /api/auth/enroll/start     X-API-Key       → {session_id, user_code, expires_in}
-POST /api/auth/enroll/poll      X-API-Key       → {status[, device_token, token_id, label, expires_at]}
+                                  body {label, auth_version?, public_key?}  (public_key for v2)
+POST /api/auth/enroll/poll      X-API-Key       → {status, token_id, label, auth_version,
+                                                    expires_at[, device_token]}  (token: v1 only)
 POST /api/auth/enroll/approve   X-API-Key + LAN → {token_id, label}                    (admin)
-GET  /api/auth/devices          X-API-Key + LAN → [{token_id, label, created_at, ...}]  (admin)
+POST /api/auth/upgrade          X-API-Key + cred → {token_id, auth_version:2}
+                                  body {public_key}; re-keys the calling device to v2 in place
+GET  /api/auth/devices          X-API-Key + LAN → [{token_id, label, auth_version, created_at, ...}]  (admin)
 DELETE /api/auth/devices/{id}   X-API-Key + LAN → 204                                   (admin)
 ```
 
@@ -108,7 +164,8 @@ Health is public; version needs the API key.
 
 ```
 GET   /api/health               → {status:"ok"}                 (public liveness probe)
-GET   /api/version   X-API-Key  → {name, version, commit, features[], units}   (feature-detect)
+GET   /api/version   X-API-Key  → {name, version, commit, features[],
+                                    auth_versions:[1,2], min_auth_version, units}   (feature-detect)
 ```
 
 ### Units — `/api/units`
@@ -139,7 +196,8 @@ State object:
   "fan_speed":102,"swing_mode":"BOTH","eco":false,"turbo":false }
 ```
 
-Errors: `401` bad key/token · `404` unknown unit · `422` out-of-range value ·
+Errors: `401` bad key/credential · `404` unknown unit · `422` out-of-range value ·
+`426` device auth-version below `min_auth_version` (upgrade the client) ·
 `503` unreachable/apply-failed.
 
 ### Programs — `/api/programs`

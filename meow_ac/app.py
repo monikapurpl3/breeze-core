@@ -48,7 +48,9 @@ from meow_ac.security.composite import CompositeAuthenticator
 from meow_ac.security.device_token import DeviceTokenAuthenticator
 from meow_ac.security.enrollment import EnrollmentService
 from meow_ac.security.headers import SecurityHeadersMiddleware
+from meow_ac.security.signing import NonceCache
 from meow_ac.security.token_store import TokenStore
+from meow_ac.security.upgrade_hint import UpgradeHintMiddleware
 from meow_ac.settings import Settings
 
 log = logging.getLogger("meow-ac")
@@ -82,10 +84,15 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     scheduler = Scheduler(manager, program_store, settings.scheduler_tick_seconds)
 
     # Auth: the API key is the enrollment secret; full access also needs a
-    # per-device token. Composing the two is a list — a further factor
-    # would just be appended here (see security/base.py).
+    # per-device credential. The device authenticator is version-aware
+    # (v1 bearer token / v2 Ed25519 request signature) and enforces the
+    # min-auth-version clamp. Composing the two factors is a list — a further
+    # factor would just be appended here (see security/base.py).
+    nonce_cache = NonceCache()
     api_key_auth = ApiKeyAuthenticator(store)
-    device_auth = DeviceTokenAuthenticator(token_store)
+    device_auth = DeviceTokenAuthenticator(
+        token_store, nonce_cache, min_auth_version=settings.min_auth_version
+    )
     full_auth = CompositeAuthenticator([api_key_auth, device_auth])
 
     # Interactive docs are disabled by default so a public deployment
@@ -128,6 +135,9 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
 
             log.warning("brotli-asgi unavailable; using gzip-only compression")
             app.add_middleware(GZipMiddleware, minimum_size=512)
+    # Advisory upgrade nudge for clients on an older auth-version. Header-only;
+    # always on (it never blocks — the min_auth_version clamp does that).
+    app.add_middleware(UpgradeHintMiddleware)
     if settings.security_headers:
         app.add_middleware(SecurityHeadersMiddleware)
     if settings.trusted_hosts:
@@ -139,9 +149,11 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     # JavaScript call this API too. If the service is ever exposed to a
     # separate front-end origin, add CORS with an explicit, narrow origin
     # allowlist — never a wildcard.
-    app.include_router(meta_api.build_meta_router(api_key_auth, manager))
+    app.include_router(meta_api.build_meta_router(api_key_auth, manager, settings))
     app.include_router(
-        auth_api.build_auth_router(token_store, enrollment, settings, api_key_auth)
+        auth_api.build_auth_router(
+            token_store, enrollment, settings, api_key_auth, device_auth
+        )
     )
     app.include_router(units_api.build_router(manager, full_auth))
     app.include_router(config_api.build_config_router(store, manager, full_auth))

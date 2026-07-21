@@ -25,6 +25,7 @@ from fastapi import APIRouter, Depends
 from meow_ac import __version__
 from meow_ac.devices.manager import DeviceManager
 from meow_ac.security.base import Authenticator
+from meow_ac.settings import Settings
 
 
 @functools.lru_cache(maxsize=1)
@@ -68,10 +69,17 @@ FEATURES = [
     "batch_state",      # GET /api/units/state
     "delete_unit",      # DELETE /api/units/{id}
     "compression",      # brotli/gzip response compression
+    "ed25519_auth",     # auth_version 2: Ed25519 request signing + /api/auth/upgrade
 ]
 
+# Device auth-versions this build understands. A client feature-detects v2
+# (and the seamless upgrade path) from this plus `min_auth_version`.
+AUTH_VERSIONS = [1, 2]
 
-def build_meta_router(api_key_auth: Authenticator, manager: DeviceManager) -> APIRouter:
+
+def build_meta_router(
+    api_key_auth: Authenticator, manager: DeviceManager, settings: Settings
+) -> APIRouter:
     router = APIRouter(prefix="/api")
 
     @router.get("/health")
@@ -85,6 +93,8 @@ def build_meta_router(api_key_auth: Authenticator, manager: DeviceManager) -> AP
             "version": __version__,
             "commit": _commit(),
             "features": FEATURES,
+            "auth_versions": AUTH_VERSIONS,
+            "min_auth_version": settings.min_auth_version,
             "units": len(manager.known_units()),
         }
 

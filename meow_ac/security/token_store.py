@@ -98,16 +98,19 @@ class TokenStore:
     # -- lookup --------------------------------------------------------
 
     def find_by_secret(self, secret: str) -> Optional[DeviceRecord]:
-        """Return the (unexpired) record whose token hash matches, or None.
+        """Return the (unexpired) v1 record whose token hash matches, or None.
 
-        Compares against every record with a constant-time check so a
+        Compares against every v1 record with a constant-time check so a
         present-but-wrong token isn't distinguishable by timing from an
-        absent one.
+        absent one. v2 records (no token_hash) are skipped — a v2 device
+        cannot authenticate with a bearer token (no silent downgrade).
         """
         candidate = crypto.hash_secret(secret)
         now = time.time()
         match: Optional[DeviceRecord] = None
         for record in self.doc.devices:
+            if record.token_hash is None:
+                continue
             if crypto.constant_time_eq(record.token_hash, candidate):
                 match = record
         if match is None:
@@ -115,6 +118,36 @@ class TokenStore:
         if match.expires_at is not None and match.expires_at < now:
             return None
         return match
+
+    def find_by_key_id(self, token_id: str) -> Optional[DeviceRecord]:
+        """Return the (unexpired) v2 record named by `token_id`, or None.
+
+        The token_id is a public identifier (sent in the clear as the
+        X-Breeze-Key-Id header); it only *names* the device, and possession
+        of the matching private key — proven by the request signature — is
+        what authorizes. So a plain lookup is fine here.
+        """
+        now = time.time()
+        for record in self.doc.devices:
+            if record.token_id != token_id or record.auth_version != 2:
+                continue
+            if record.expires_at is not None and record.expires_at < now:
+                return None
+            return record
+        return None
+
+    def upgrade_to_v2(self, token_id: str, public_key: str) -> bool:
+        """Migrate an existing v1 device to v2 in place: keep its identity
+        (token_id/label/created_at/expiry) but replace the bearer credential
+        with an Ed25519 public key. Returns False if no such device."""
+        for record in self.doc.devices:
+            if record.token_id == token_id:
+                record.auth_version = 2
+                record.public_key = public_key
+                record.token_hash = None
+                self.save()
+                return True
+        return False
 
     def touch(self, token_id: str) -> None:
         """Record last-use in memory (not persisted, to keep the verify

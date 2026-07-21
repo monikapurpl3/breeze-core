@@ -15,6 +15,11 @@ from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 hiddenimports = (
     collect_submodules("uvicorn")     # uvicorn loads loops/protocols dynamically
     + collect_submodules("msmart")    # device I/O; keep every protocol module
+    # pycryptodome: msmart only imports Crypto.Cipher.AES, so PyInstaller's
+    # static scan misses the SHA3-512 / Ed25519 modules the v2 auth profile
+    # needs (Crypto.Hash.SHA3_512, Crypto.PublicKey.ECC, Crypto.Signature.eddsa).
+    # Collect the whole package so the frozen binary can verify v2 signatures.
+    + collect_submodules("Crypto")
     + ["brotli_asgi", "brotli", "setup_device",
        "meow_ac.cli.main", "meow_ac.cli.diag", "meow_ac.cli.approve", "meow_ac.cli.client"]
 )
