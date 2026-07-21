@@ -424,6 +424,16 @@ body{
   margin-top: 6px;
 }
 .btn-row .enroll-btn{ flex: 1; }
+/* Scan-to-add: a scrollable list of discovered-unit rows. */
+.scan-list{
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+  margin: 6px 0;
+}
+.scan-row{ text-align: left; }
 .empty-state code{
   background: var(--surface-2);
   border: 1px solid var(--border);

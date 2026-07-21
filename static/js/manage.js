@@ -125,7 +125,114 @@ export function confirmDialog({ title, message, confirmLabel = "OK" }){
   });
 }
 
+// Choose how to add a unit: resolves 'scan' | 'ip' | null.
+export function addSourceDialog(){
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "enroll-overlay";
+    const card = document.createElement("div");
+    card.className = "enroll-card";
+    overlay.appendChild(card);
+
+    const h = document.createElement("h2");
+    h.textContent = "Add a unit";
+    card.appendChild(h);
+
+    const p = document.createElement("p");
+    p.className = "enroll-intro";
+    p.textContent = "Find units on your network automatically, or add one by its IP.";
+    card.appendChild(p);
+
+    const scan = document.createElement("button");
+    scan.className = "enroll-btn";
+    scan.textContent = "Scan the network";
+    const manual = document.createElement("button");
+    manual.className = "enroll-btn secondary";
+    manual.textContent = "Enter IP address";
+    card.append(scan, manual);
+
+    const close = (r) => { overlay.remove(); resolve(r); };
+    scan.onclick = () => close("scan");
+    manual.onclick = () => close("ip");
+    overlay.addEventListener("click", (e) => { if(e.target === overlay) close(null); });
+    document.body.appendChild(overlay);
+    scan.focus();
+  });
+}
+
+// Scan the LAN and let the user pick a found unit. Resolves to a chosen IP,
+// '__manual__' (user chose to type an IP), or null (cancelled). Handles a
+// pre-3.0 server (no scan endpoint) by offering the manual path.
+export function scanDialog(){
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "enroll-overlay";
+    const card = document.createElement("div");
+    card.className = "enroll-card";
+    overlay.appendChild(card);
+
+    const h = document.createElement("h2");
+    h.textContent = "Scan for units";
+    card.appendChild(h);
+
+    const list = document.createElement("div");
+    list.className = "scan-list";
+    card.appendChild(list);
+
+    const btnRow = document.createElement("div");
+    btnRow.className = "btn-row";
+    const manual = document.createElement("button");
+    manual.className = "enroll-btn secondary";
+    manual.textContent = "Enter IP instead";
+    const rescan = document.createElement("button");
+    rescan.className = "enroll-btn secondary";
+    rescan.textContent = "Rescan";
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "enroll-btn secondary";
+    closeBtn.textContent = "Close";
+    btnRow.append(manual, rescan, closeBtn);
+    card.appendChild(btnRow);
+
+    const close = (r) => { overlay.remove(); resolve(r); };
+    manual.onclick = () => close("__manual__");
+    closeBtn.onclick = () => close(null);
+    overlay.addEventListener("click", (e) => { if(e.target === overlay) close(null); });
+
+    const setMsg = (text) => { list.textContent = ""; const p = document.createElement("p");
+      p.className = "enroll-intro"; p.textContent = text; list.appendChild(p); };
+
+    async function run(){
+      setMsg("Scanning the network…");
+      rescan.disabled = true;
+      let res;
+      try{ res = await apiScanUnits(); }
+      catch(_){ setMsg("Scan failed — check the connection and try again."); rescan.disabled = false; return; }
+      rescan.disabled = false;
+      if(res.status === 404){ setMsg("This server is older than 3.0 and can’t scan. Add the unit by its IP instead."); return; }
+      if(!res.ok){ setMsg("Scan failed (" + res.status + ")."); return; }
+      const data = await res.json();
+      const cands = (data.candidates || []);
+      if(cands.length === 0){ setMsg("No units found. Make sure they’re powered on and on this network, or add one by its IP."); return; }
+      list.textContent = "";
+      for(const c of cands){
+        const row = document.createElement("button");
+        row.className = "enroll-btn secondary scan-row";
+        row.disabled = !!c.known;
+        row.textContent = c.known ? `${c.ip} — already added` : `${c.ip} — port ${c.port} open`;
+        if(!c.known) row.onclick = () => close(c.ip);
+        list.appendChild(row);
+      }
+    }
+    rescan.onclick = run;
+    document.body.appendChild(overlay);
+    run();
+  });
+}
+
 // --- API calls (return the raw Response; caller handles 401/errors) ---
+export function apiScanUnits(){
+  return apiFetch("/api/units/scan");
+}
 export function apiAddUnit(ip, name){
   const body = name ? { ip, name } : { ip };
   return apiFetch("/api/units", {
