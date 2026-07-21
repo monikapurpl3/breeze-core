@@ -117,12 +117,22 @@ Still fully supported.
 
 ### Rollout and in-place upgrade
 
-`AC_MIN_AUTH_VERSION` (default `1`) is the clamp. At `1`, v1 and v2 devices
-both work and v1-authenticated responses carry an advisory
-`X-Breeze-Upgrade: auth-version=2` header. Raise it to `2` once your clients
-are updated: v1 requests are then refused with **`426 Upgrade Required`** and
-a human-readable message (which even an un-updated client surfaces to the
-user).
+`AC_MIN_AUTH_VERSION` (default `1`) is the clamp. At `1`, both v1 and v2
+devices work — a **new device may still enrol as either** (the web UI and the
+zsh/binary CLIs are v1-only, so this must stay open by default), and
+v1-authenticated responses carry an advisory `X-Breeze-Upgrade:
+auth-version=2` header. Raise it to `2` once your clients are updated and v1
+is fully closed:
+
+- v1 **control** requests are refused with **`426 Upgrade Required`** + a
+  human-readable message (which even an un-updated client surfaces).
+- v1 **enrollment** is refused too — `enroll/start` with `auth_version` below
+  the floor returns `426`, so no new legacy credential is ever minted (not
+  even a dead one that would be clamped on its first call).
+
+So a clamped server effectively runs v2-only: existing v1 devices must
+upgrade, and no new v1 device can be created. **Migrate the web UI and CLIs
+before raising the clamp** — they can't do v2 yet.
 
 An enrolled v1 device upgrades to v2 **in place** — `POST /api/auth/upgrade`,
 authenticated by its *existing* credential, registers a freshly-generated

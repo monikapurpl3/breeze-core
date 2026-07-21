@@ -89,6 +89,26 @@ def build_auth_router(
     @router.post("/enroll/start", dependencies=[Depends(api_key_auth)])
     async def enroll_start(req: StartRequest, request: Request):
         _limit(start_limit, request)
+        # Enforce the clamp at enrollment, not just at control: when the admin
+        # has raised the floor (AC_MIN_AUTH_VERSION >= 2) we refuse to mint a
+        # new credential below it, rather than minting one that would be
+        # 426'd on its first control call. So a clamped server enrolls no new
+        # v1 devices at all — existing ones are still refused at control time
+        # and must upgrade. (At the default floor of 1, v1 enrollment stays
+        # open for the v1-only web UI and CLIs.)
+        if req.auth_version < settings.min_auth_version:
+            raise HTTPException(
+                426,
+                {
+                    "error": "auth_upgrade_required",
+                    "min_auth_version": settings.min_auth_version,
+                    "detail": (
+                        "This server no longer enrols devices on the legacy "
+                        "auth version — use a client that signs requests "
+                        "(Ed25519)."
+                    ),
+                },
+            )
         if req.auth_version == 2:
             if not signing.public_key_is_valid(req.public_key):
                 raise HTTPException(400, "invalid or missing Ed25519 public_key for auth_version 2")

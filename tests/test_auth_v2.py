@@ -148,12 +148,29 @@ def test_v1_still_works_and_gets_upgrade_hint(tmp_path):
     assert r.headers.get("X-Breeze-Upgrade") == "auth-version=2"
 
 
-def test_clamp_426_blocks_v1_when_min_is_2(tmp_path):
-    c = _make_app(tmp_path, min_auth_version=2)
-    tok = _enroll_v1(c)
-    r = c.get("/api/units", headers={**KEY, "Authorization": f"Bearer {tok}"})
+def test_clamp_426_blocks_existing_v1_when_min_is_2(tmp_path):
+    # Enrol a v1 device while the floor is 1 (as it is by default)...
+    c1 = _make_app(tmp_path, min_auth_version=1)
+    tok = _enroll_v1(c1)
+    # ...then the admin raises the floor. Same devices.json, reloaded.
+    c2 = _make_app(tmp_path, min_auth_version=2)
+    r = c2.get("/api/units", headers={**KEY, "Authorization": f"Bearer {tok}"})
     assert r.status_code == 426, r.text
     assert r.json()["detail"]["error"] == "auth_upgrade_required"
+
+
+def test_clamp_blocks_new_v1_enrollment_but_allows_v2(tmp_path):
+    # With the floor at 2, a NEW v1 enrollment is refused up front (no dead
+    # bearer credential is minted)...
+    c = _make_app(tmp_path, min_auth_version=2)
+    r = c.post("/api/auth/enroll/start", headers=KEY, json={"label": "legacy"})
+    assert r.status_code == 426, r.text
+    assert r.json()["detail"]["error"] == "auth_upgrade_required"
+    # ...while v2 enrollment still works.
+    ref = RefClient()
+    _enroll_v2(c, ref)
+    h = {**KEY, **ref.sign_headers("GET", "/api/units", b"")}
+    assert c.get("/api/units", headers=h).status_code == 200
 
 
 def test_in_place_upgrade_v1_to_v2(tmp_path):
