@@ -11,6 +11,10 @@ name: breeze-core
 arch: ${BC_ARCH}
 platform: linux
 version: ${BC_VERSION}
+# Take the version string verbatim from __init__.py rather than parsing it as
+# semver — pre-release dev versions like "3.0.0.pre" aren't semver and nfpm's
+# default schema would reject them. Final releases ("3.0.0") are unaffected.
+version_schema: none
 section: utils
 priority: optional
 maintainer: monikapurpl3 <monikapurpl3@users.noreply.github.com>
