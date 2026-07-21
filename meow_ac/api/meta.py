@@ -70,6 +70,8 @@ FEATURES = [
     "delete_unit",      # DELETE /api/units/{id}
     "compression",      # brotli/gzip response compression
     "ed25519_auth",     # auth_version 2: Ed25519 request signing + /api/auth/upgrade
+    "unit_scan",        # GET /api/units/scan — LAN TCP scan for add-from-scan
+    "beep_control",     # POST /control honours an optional `beep` field
 ]
 
 # Device auth-versions this build understands. A client feature-detects v2

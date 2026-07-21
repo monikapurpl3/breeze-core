@@ -42,6 +42,10 @@ class ControlRequest(BaseModel):
     swing_mode: Optional[str] = None
     eco: Optional[bool] = None
     turbo: Optional[bool] = None
+    # Whether the unit chirps when it accepts the command. Optional; when
+    # absent the apply path defaults to silent (see devices/control.py), so
+    # older clients that never send `beep` keep the quiet behaviour.
+    beep: Optional[bool] = None
 
     @field_validator("target_temperature")
     @classmethod

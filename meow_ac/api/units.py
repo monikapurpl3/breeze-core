@@ -13,8 +13,9 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
+from meow_ac.devices import discovery
 from meow_ac.devices.control import apply_to_unit
 from meow_ac.devices.manager import DeviceManager
 from meow_ac.devices.schemas import ControlRequest, serialize
@@ -27,6 +28,10 @@ def build_router(manager: DeviceManager, authenticator: Authenticator) -> APIRou
     # Auth is applied to the whole router, so every /api/* route is
     # protected by construction — you can't forget it on a new endpoint.
     router = APIRouter(prefix="/api", dependencies=[Depends(authenticator)])
+
+    # Serialize scans: a scan is a burst of hundreds of connects, and two at
+    # once just doubles the load for no benefit.
+    scan_lock = asyncio.Lock()
 
     @router.get("/units")
     async def list_units():
@@ -62,6 +67,40 @@ def build_router(manager: DeviceManager, authenticator: Authenticator) -> APIRou
         states = [r[1] for r in results if r[0] == "ok"]
         errors = [r[1] for r in results if r[0] == "err"]
         return {"states": states, "errors": errors}
+
+    @router.get("/units/scan")
+    async def scan_units(
+        subnet: str = Query(default="", description="CIDR to scan; default: the server's private /24"),
+        timeout: float = Query(default=0.4, ge=0.1, le=3.0),
+    ):
+        """Scan the LAN for hosts with a Midea port (6440–6449) open, so a
+        client can offer 'pick from found units' next to manual IP entry.
+        Read-only: it finds candidates; adding one still goes through
+        POST /api/units (which runs real discovery). Candidates already in
+        the config are flagged `known`."""
+        target = subnet or discovery.local_private_subnet()
+        if not target:
+            raise HTTPException(
+                400,
+                "couldn't determine the LAN subnet automatically — pass ?subnet=192.168.1.0/24",
+            )
+        if scan_lock.locked():
+            raise HTTPException(409, "a scan is already in progress")
+        async with scan_lock:
+            try:
+                found = await discovery.scan_subnet(target, timeout=timeout)
+            except ValueError as e:
+                raise HTTPException(400, str(e))
+            except Exception:
+                log.exception("scan failed for %s", target)
+                raise HTTPException(503, "scan failed")
+
+        known_ips = {u.ip for u in manager.known_units()}
+        candidates = [
+            {"ip": ip, "port": port, "known": ip in known_ips}
+            for ip, port in sorted(found.items(), key=lambda kv: tuple(int(o) for o in kv[0].split(".")))
+        ]
+        return {"subnet": target, "candidates": candidates}
 
     @router.get("/units/{unit_id}/state")
     async def unit_state(unit_id: str):

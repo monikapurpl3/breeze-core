@@ -180,6 +180,9 @@ GET    /api/units/state         → {states:[…], errors:[{id,name,ip,detail}]}
 GET    /api/units/{id}/state    → full state (connects + refreshes the unit)
 POST   /api/units/{id}/control  → full state (applies only the fields present)
 PATCH  /api/units/{id}          → rename a unit (body {name}) → sanitized unit view
+GET    /api/units/scan          → {subnet, candidates:[{ip, port, known}]}  (LAN TCP scan
+                                   of ports 6440–6449; ?subnet=CIDR override, ?timeout=;
+                                   read-only — adding still goes through POST /api/units)
 POST   /api/units               → add a unit by LAN IP (body {ip, name?}); discovers
                                    it and writes config.json → 201 sanitized unit view
 DELETE /api/units/{id}          → remove a unit from config → 204
@@ -234,6 +237,8 @@ Used identically by the API, the web UI, the app, and the diagnostic CLI:
 | `swing_mode` | `OFF` `VERTICAL` `HORIZONTAL` `BOTH` — two physical flaps; an unsupported one is silently ignored by firmware |
 | `target_temperature` | `16.0`–`30.0` in `0.5°` steps (Celsius on the wire; clients may display °F) |
 | `fan_speed` | `20` / `40` / `60` / `80` / `100`, plus `102` = auto |
+| `beep` | optional `bool` on `POST /control` only — whether the unit chirps on accept. Omitted ⇒ silent. Not part of the returned state. |
 
-`POST /control` applies only the fields present in the body, and always sets
-`beep = false`.
+`POST /control` applies only the fields present in the body. `beep` defaults
+to `false` when omitted (so schedules/curves and older clients stay quiet); a
+client sends `beep: true` to make the unit chirp on accept.
