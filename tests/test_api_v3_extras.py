@@ -6,10 +6,14 @@ history-404) is covered in test_auth_v2.py against the real app.
 """
 from __future__ import annotations
 
+import contextlib
 from types import SimpleNamespace
+
+import pytest
 
 from meow_ac.devices.history import HistoryBuffer
 from meow_ac.devices.schemas import serialize_capabilities
+from meow_ac.devices.stream import StateStream
 
 
 def _m(name):
@@ -73,3 +77,68 @@ def test_history_buffer_ignores_stateless_record():
     buf = HistoryBuffer(size=4)
     buf.record({"target_temperature": 20.0})       # no id → ignored
     assert buf.latest("anything") is None
+
+
+# --- SSE broadcaster ---------------------------------------------------------
+
+class _FakeManagerDevice:
+    """A device whose state can be mutated between polls."""
+    def __init__(self):
+        self.online = True
+        self.power_state = True
+        self.operational_mode = SimpleNamespace(name="COOL")
+        self.target_temperature = 22.0
+        self.indoor_temperature = 26.0
+        self.outdoor_temperature = 31.0
+        self.fan_speed = 102
+        self.swing_mode = SimpleNamespace(name="OFF")
+        self.eco = False
+        self.turbo = False
+
+    async def refresh(self):
+        pass
+
+
+class _FakeManager:
+    def __init__(self, device):
+        self._d = device
+        self._u = SimpleNamespace(unit_id="u1", name="Room", ip="192.0.2.5")
+
+    def known_units(self):
+        return [self._u]
+
+    def unit_config(self, uid):
+        return self._u
+
+    def lock_for(self, uid):
+        @contextlib.asynccontextmanager
+        async def _noop():
+            yield
+        return _noop()
+
+    async def get(self, uid):
+        return self._d
+
+
+@pytest.mark.asyncio
+async def test_stream_broadcasts_only_on_change():
+    dev = _FakeManagerDevice()
+    stream = StateStream(_FakeManager(dev), HistoryBuffer(size=10), tick_seconds=1)
+    q = stream.subscribe()
+
+    await stream._poll_once()
+    assert q.qsize() == 1                     # first observation → an event
+    ev_type, data = q.get_nowait()
+    assert ev_type == "state" and data["target_temperature"] == 22.0
+
+    await stream._poll_once()
+    assert q.qsize() == 0                     # unchanged → no event
+
+    dev.target_temperature = 24.0
+    await stream._poll_once()
+    assert q.qsize() == 1                     # changed → an event
+    assert q.get_nowait()[1]["target_temperature"] == 24.0
+
+    # snapshot reflects the latest broadcast state (for new subscribers)
+    snap = stream.snapshot()
+    assert snap and snap[0][1]["target_temperature"] == 24.0

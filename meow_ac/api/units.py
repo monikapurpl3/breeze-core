@@ -11,15 +11,18 @@ and including it in `create_app()`; this file stays about units.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import StreamingResponse
 
 from meow_ac.devices import discovery
 from meow_ac.devices.control import apply_to_unit
 from meow_ac.devices.history import HistoryBuffer
 from meow_ac.devices.manager import DeviceManager
 from meow_ac.devices.schemas import ControlRequest, serialize, serialize_capabilities
+from meow_ac.devices.stream import StateStream
 from meow_ac.security.base import Authenticator
 
 log = logging.getLogger("meow-ac")
@@ -29,6 +32,7 @@ def build_router(
     manager: DeviceManager,
     authenticator: Authenticator,
     history: HistoryBuffer,
+    stream: StateStream,
 ) -> APIRouter:
     # Auth is applied to the whole router, so every /api/* route is
     # protected by construction — you can't forget it on a new endpoint.
@@ -108,6 +112,45 @@ def build_router(
             for ip, port in sorted(found.items(), key=lambda kv: tuple(int(o) for o in kv[0].split(".")))
         ]
         return {"subnet": target, "candidates": candidates}
+
+    @router.get("/units/stream")
+    async def units_stream(request: Request):
+        """Server-Sent Events: live per-unit state pushed as it changes, so
+        clients drop their own polling. Emits `event: state` frames (a full
+        serialized unit state) plus `: keepalive` comments. The server polls
+        the units centrally only while at least one stream is open."""
+        async def gen():
+            q = stream.subscribe()
+            try:
+                # Immediate byte so the client (and any proxy) sees the stream
+                # is live without waiting for the first tick.
+                yield ": connected\n\n"
+                for _type, data in stream.snapshot():
+                    yield f"event: state\ndata: {json.dumps(data)}\n\n"
+                while True:
+                    if await request.is_disconnected():
+                        break
+                    try:
+                        ev_type, data = await asyncio.wait_for(q.get(), timeout=15)
+                        yield f"event: {ev_type}\ndata: {json.dumps(data)}\n\n"
+                    except asyncio.TimeoutError:
+                        yield ": keepalive\n\n"
+            finally:
+                stream.unsubscribe(q)
+
+        return StreamingResponse(
+            gen(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache, no-transform",
+                "X-Accel-Buffering": "no",   # ask nginx not to buffer the stream
+                "Connection": "keep-alive",
+                # Pre-set the content encoding so the brotli middleware leaves
+                # the stream alone: a compressed event-stream would be garbage
+                # to a client that can't decode brotli (e.g. Dart's http).
+                "Content-Encoding": "identity",
+            },
+        )
 
     @router.get("/units/{unit_id}/state")
     async def unit_state(unit_id: str):

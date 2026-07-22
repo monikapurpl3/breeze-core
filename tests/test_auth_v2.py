@@ -228,3 +228,11 @@ def test_history_unknown_unit_404(tmp_path):
     _enroll_v2(c, ref)
     h = {**KEY, **ref.sign_headers("GET", "/api/units/nope/history", b"")}
     assert c.get("/api/units/nope/history", headers=h).status_code == 404
+
+
+def test_stream_requires_auth(tmp_path):
+    # The SSE endpoint is behind the same key+credential gate as the rest of
+    # /api/units — no credential, no stream. (The live streaming behaviour is
+    # exercised separately against a real uvicorn server.)
+    c = _make_app(tmp_path)
+    assert c.get("/api/units/stream", headers=KEY).status_code == 401

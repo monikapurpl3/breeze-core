@@ -106,6 +106,8 @@ sudo nginx -t && sudo systemctl reload nginx
 ```
 After you obtain a cert (section 3) certbot rewrites this to `listen 443 ssl;` and adds a port-80 → 443 redirect automatically.
 
+> **Live updates (SSE).** The app's live-state stream (`GET /api/units/stream`, Breeze Core ≥ 3.0.0) is a long-lived `text/event-stream`. The app sends `X-Accel-Buffering: no` on the response, which **nginx honours automatically** — no config change needed; the config above already proxies it. If you front it with **Apache**, disable output buffering for that path (`SetEnv proxy-sendchunked 1` and avoid `mod_deflate` on it), and with **Caddy** it works out of the box. The stream also self-disables compression (`Content-Encoding: identity`), so no proxy needs to touch it.
+
 ### Option B — Apache (httpd)
 
 **Install + modules:**

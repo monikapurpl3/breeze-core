@@ -86,6 +86,10 @@ class Settings:
     # last-known values in /metrics). ~720 ≈ an hour at the app's 5 s poll.
     history_size: int = 720
 
+    # How often the SSE broadcaster polls the units while ≥1 client is
+    # streaming (seconds). Matches the app's old poll cadence.
+    stream_tick_seconds: int = 5
+
     # Minimum device auth-version accepted on control routes. 1 (default)
     # accepts both the legacy bearer scheme and v2 Ed25519 request signing —
     # a soft rollout where old clients keep working and are nudged to
@@ -121,4 +125,5 @@ class Settings:
             token_ttl_days=_env_int("AC_TOKEN_TTL_DAYS", 90),
             min_auth_version=_env_int("AC_MIN_AUTH_VERSION", 1),
             history_size=_env_int("AC_HISTORY_SIZE", 720),
+            stream_tick_seconds=_env_int("AC_STREAM_TICK", 5),
         )

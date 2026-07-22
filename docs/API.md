@@ -56,6 +56,7 @@ headers on, LAN-only approval).
 | `AC_TOKEN_TTL_DAYS` | `90` | device-token lifetime; `0` = never expires |
 | `AC_MIN_AUTH_VERSION` | `1` | minimum device auth-version accepted (see [Authentication](#authentication-device-pairing)). `1` = accept legacy bearer **and** Ed25519 v2; `2` = refuse v1 with 426 |
 | `AC_HISTORY_SIZE` | `720` | per-unit in-memory history samples kept for `/history` and `/metrics` (~1h at the app's 5s poll) |
+| `AC_STREAM_TICK` | `5` | how often the SSE broadcaster (`/api/units/stream`) polls the units while ≥1 client is connected (seconds) |
 
 > Point them at your chosen config dir, e.g.
 > `AC_CONFIG=/etc/breeze-core/config.json` — `AC_DEVICES`/`AC_PROGRAMS` then
@@ -199,6 +200,9 @@ GET    /api/units/{id}/capabilities → what the unit supports (see below) — l
 GET    /api/units/{id}/history  → {id, samples:[…]} recent in-memory readings
                                    (indoor/outdoor/target/mode/power) for a graph;
                                    best-effort, non-persistent, empty until polled
+GET    /api/units/stream        → text/event-stream: live per-unit state pushed
+                                   as it changes (SSE). `event: state` frames +
+                                   `: keepalive` comments. See "Live updates" below.
 POST   /api/units/{id}/control  → full state (applies only the fields present)
 PATCH  /api/units/{id}          → rename a unit (body {name}) → sanitized unit view
 GET    /api/units/scan          → {subnet, candidates:[{ip, port, known}]}  (LAN TCP scan
@@ -238,6 +242,32 @@ hide it):
   "supports_eco":true,"supports_turbo":true,"supports_display_control":true,
   "supports_freeze_protection":false,"supports_humidity":false }
 ```
+
+### Live updates — `/api/units/stream` (SSE)
+
+`GET /api/units/stream` is a **Server-Sent Events** stream (full auth, same as
+the other unit routes). Instead of each client polling, the server polls the
+units **once** (only while ≥1 client is connected) and fans changes out to all
+streams — the app can drop its own poll loop (battery), and a change made by a
+schedule or another client shows up on the next tick.
+
+```
+: connected                       ← sent immediately on open
+event: state                      ← one frame per unit, whenever it changes
+data: {"id":"…","online":true, … same shape as GET /state}
+
+: keepalive                       ← comment every ~15 s to hold the connection
+```
+
+Notes:
+- It pushes the same state object as `/state`; a client applies each frame to
+  its cached unit. Cadence while connected is `AC_STREAM_TICK` (default 5 s) —
+  Midea units have no push, so the server still polls them; SSE only
+  centralises that polling.
+- **Compression is disabled** for this route (`Content-Encoding: identity`),
+  so a client that can't decode brotli still reads it; the response also sets
+  `X-Accel-Buffering: no` so nginx doesn't buffer it (see
+  [REVERSE-PROXY.md](REVERSE-PROXY.md)).
 
 ### Programs — `/api/programs`
 

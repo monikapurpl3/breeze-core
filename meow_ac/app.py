@@ -43,6 +43,7 @@ from meow_ac.api import units as units_api
 from meow_ac.config.store import ConfigStore
 from meow_ac.devices.history import HistoryBuffer
 from meow_ac.devices.manager import DeviceManager
+from meow_ac.devices.stream import StateStream
 from meow_ac.programs.scheduler import Scheduler
 from meow_ac.programs.store import ProgramStore
 from meow_ac.security.api_key import ApiKeyAuthenticator
@@ -79,6 +80,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     program_store.load()
     manager = DeviceManager(store)
     history = HistoryBuffer(size=settings.history_size)
+    stream = StateStream(manager, history, tick_seconds=settings.stream_tick_seconds)
     enrollment = EnrollmentService(
         token_store,
         code_ttl_seconds=settings.code_ttl_seconds,
@@ -106,14 +108,17 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         else {"docs_url": None, "redoc_url": None, "openapi_url": None}
     )
 
-    # Lifespan runs the background scheduler for the life of the process
-    # (single worker → exactly one scheduler). Cancelled on shutdown.
+    # Lifespan runs the background scheduler + the SSE broadcaster for the
+    # life of the process (single worker → exactly one of each). The stream
+    # poller stays idle until a client subscribes. Both cancelled on shutdown.
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         await scheduler.start()
+        await stream.start()
         try:
             yield
         finally:
+            await stream.stop()
             await scheduler.stop()
 
     app = FastAPI(title="meow-ac", lifespan=lifespan, **docs_kwargs)
@@ -158,7 +163,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
             token_store, enrollment, settings, api_key_auth, device_auth
         )
     )
-    app.include_router(units_api.build_router(manager, full_auth, history))
+    app.include_router(units_api.build_router(manager, full_auth, history, stream))
     app.include_router(metrics_api.build_metrics_router(api_key_auth, manager, history, scheduler))
     app.include_router(config_api.build_config_router(store, manager, full_auth))
     app.include_router(

@@ -76,6 +76,7 @@ FEATURES = [
     "unit_history",     # GET /api/units/{id}/history (in-memory samples)
     "whoami",           # GET /api/auth/whoami
     "metrics",          # GET /metrics (Prometheus, API-key gated)
+    "live_stream",      # GET /api/units/stream — SSE live state push
 ]
 
 # Device auth-versions this build understands. A client feature-detects v2
