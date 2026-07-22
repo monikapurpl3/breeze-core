@@ -10,10 +10,11 @@ on:
   workflow_dispatch:
   push:
     paths:
+      # Scoped to the BSD packaging itself until the recipe is green (being
+      # finalised on a real FreeBSD/NetBSD VM) — so it doesn't re-fail on
+      # unrelated server commits. Re-broaden once it passes.
       - "packaging/bsd/**"
       - ".github/workflows/bsd.yml"
-      - "meow_ac/**"
-      - "requirements.txt"
 
 jobs:
   freebsd:
