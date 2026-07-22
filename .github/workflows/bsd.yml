@@ -1,0 +1,98 @@
+name: BSD
+
+# Verifies the BSD source install on real FreeBSD / OpenBSD / NetBSD VMs
+# (vmactions) — the Linux bundles can't run on a BSD kernel, so BSD installs
+# from source into a venv via packaging/bsd/install.sh. Each job: install →
+# `breeze-core version` → serve → GET /api/health. FreeBSD also exercises the
+# rc.d service and builds a native .pkg (uploaded as an artifact).
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "packaging/bsd/**"
+      - ".github/workflows/bsd.yml"
+      - "meow_ac/**"
+      - "requirements.txt"
+
+jobs:
+  freebsd:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+      - name: FreeBSD — install, service, native .pkg
+        uses: vmactions/freebsd-vm@v1
+        with:
+          release: "14.2"
+          usesh: true
+          prepare: pkg install -y python311 py311-pip rust
+          run: |
+            set -e
+            sh packaging/bsd/install.sh
+            breeze-core version
+            printf '{"api_key":"k","units":[]}' > /usr/local/etc/breeze-core/config.json
+            chown breeze /usr/local/etc/breeze-core/config.json
+            sysrc breeze_core_enable=YES
+            service breeze_core start
+            sleep 6
+            /usr/local/breeze-core/venv/bin/python - <<'PY'
+            import sys, urllib.request
+            b = urllib.request.urlopen("http://127.0.0.1:8420/api/health", timeout=8).read()
+            print("health:", b)
+            sys.exit(0 if b'"ok"' in b else 1)
+            PY
+            service breeze_core stop || true
+            sh packaging/bsd/mkpkg-freebsd.sh "$(pwd)" || echo "::warning:: pkg create failed (non-fatal)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: freebsd-pkg
+          path: "*.pkg"
+          if-no-files-found: warn
+
+  openbsd:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+      - name: OpenBSD — install + serve + health
+        uses: vmactions/openbsd-vm@v1
+        with:
+          release: "7.6"
+          prepare: pkg_add -I python%3.11 rust
+          run: |
+            set -e
+            ln -sf /usr/local/bin/python3.11 /usr/local/bin/python3 || true
+            sh packaging/bsd/install.sh
+            breeze-core version
+            /usr/local/breeze-core/venv/bin/python -m meow_ac.cli serve --host 127.0.0.1 --port 8420 >/tmp/s.log 2>&1 &
+            sleep 8
+            /usr/local/breeze-core/venv/bin/python - <<'PY'
+            import sys, urllib.request
+            b = urllib.request.urlopen("http://127.0.0.1:8420/api/health", timeout=8).read()
+            print("health:", b)
+            sys.exit(0 if b'"ok"' in b else 1)
+            PY
+
+  netbsd:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+      - name: NetBSD — install + serve + health
+        uses: vmactions/netbsd-vm@v1
+        with:
+          release: "10.0"
+          prepare: /usr/pkg/bin/pkgin -y install python311 py311-pip rust
+          run: |
+            set -e
+            sh packaging/bsd/install.sh
+            breeze-core version
+            /usr/pkg/breeze-core/venv/bin/python -m meow_ac.cli serve --host 127.0.0.1 --port 8420 >/tmp/s.log 2>&1 &
+            sleep 8
+            /usr/pkg/breeze-core/venv/bin/python - <<'PY'
+            import sys, urllib.request
+            b = urllib.request.urlopen("http://127.0.0.1:8420/api/health", timeout=8).read()
+            print("health:", b)
+            sys.exit(0 if b'"ok"' in b else 1)
+            PY

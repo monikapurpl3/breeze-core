@@ -1,0 +1,46 @@
+#!/bin/sh
+# Breeze Core — NetBSD rc.d service (installed to /etc/rc.d/breeze_core).
+# Enable with `breeze_core=YES` in /etc/rc.conf, then `service breeze_core start`.
+# NetBSD has no daemon(8), so we background the venv app ourselves under su(1).
+#
+# PROVIDE: breeze_core
+# REQUIRE: NETWORKING
+
+$_rc_subr_loaded . /etc/rc.subr
+
+name=breeze_core
+rcvar=$name
+pidfile=/var/run/${name}.pid
+start_cmd=breeze_start
+stop_cmd=breeze_stop
+
+_appdir=/usr/pkg/breeze-core
+_etcdir=/usr/pkg/etc/breeze-core
+
+breeze_start()
+{
+	BREEZE_HOST=127.0.0.1
+	BREEZE_PORT=8420
+	BREEZE_OPTS=""
+	[ -r "${_etcdir}/breeze-core.env" ] && . "${_etcdir}/breeze-core.env"
+	echo "Starting ${name}."
+	su -m breeze -c "env PYTHONPATH=${_appdir} \
+	  AC_CONFIG=${_etcdir}/config.json \
+	  AC_DEVICES=${_etcdir}/devices.json \
+	  AC_PROGRAMS=${_etcdir}/programs.json \
+	  ${_appdir}/venv/bin/python -m meow_ac.cli serve \
+	  --host ${BREEZE_HOST} --port ${BREEZE_PORT} ${BREEZE_OPTS} \
+	  >> /var/log/${name}.log 2>&1 & echo \$! > ${pidfile}"
+}
+
+breeze_stop()
+{
+	if [ -r "${pidfile}" ]; then
+		echo "Stopping ${name}."
+		kill "$(cat "${pidfile}")" 2>/dev/null || true
+		rm -f "${pidfile}"
+	fi
+}
+
+load_rc_config $name
+run_rc_command "$1"

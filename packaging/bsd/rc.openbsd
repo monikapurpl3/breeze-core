@@ -1,0 +1,28 @@
+#!/bin/ksh
+# Breeze Core — OpenBSD rc.d service (installed to /etc/rc.d/breeze_core).
+# Enable + start with:  rcctl enable breeze_core && rcctl start breeze_core
+# Flags can be overridden in /etc/rc.conf.local (breeze_core_flags=...).
+
+_appdir=/usr/local/breeze-core
+_etcdir=/etc/breeze-core
+
+BREEZE_HOST=127.0.0.1
+BREEZE_PORT=8420
+BREEZE_OPTS=""
+[ -r "${_etcdir}/breeze-core.env" ] && . "${_etcdir}/breeze-core.env"
+
+export PYTHONPATH="${_appdir}"
+export AC_CONFIG="${_etcdir}/config.json"
+export AC_DEVICES="${_etcdir}/devices.json"
+export AC_PROGRAMS="${_etcdir}/programs.json"
+
+daemon="${_appdir}/venv/bin/python"
+daemon_flags="-m meow_ac.cli serve --host ${BREEZE_HOST} --port ${BREEZE_PORT} ${BREEZE_OPTS}"
+daemon_user="breeze"
+
+. /etc/rc.d/rc.subr
+
+rc_bg=YES
+rc_reload=NO
+
+rc_cmd $1
