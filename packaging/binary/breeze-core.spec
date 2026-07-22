@@ -21,7 +21,8 @@ hiddenimports = (
     # Collect the whole package so the frozen binary can verify v2 signatures.
     + collect_submodules("Crypto")
     + ["brotli_asgi", "brotli", "setup_device",
-       "meow_ac.cli.main", "meow_ac.cli.diag", "meow_ac.cli.approve", "meow_ac.cli.client"]
+       "meow_ac.cli.main", "meow_ac.cli.diag", "meow_ac.cli.approve",
+       "meow_ac.cli.client", "meow_ac.cli.service"]
 )
 
 datas = (

@@ -454,6 +454,55 @@ check_programs() {
   fi
 }
 
+check_service() {
+  # Host-local: is the breeze-core service running, and enabled at boot?
+  # Only meaningful when run on the server itself — skips gracefully otherwise.
+  section "background service"
+  local -a names; names=(breeze-core meow-ac)
+  local name found=""
+  if command -v systemctl >/dev/null 2>&1 && [[ -d /run/systemd/system ]]; then
+    for name in $names; do
+      systemctl list-unit-files "${name}.service" --no-legend 2>/dev/null | grep -q . || continue
+      found=$name
+      [[ "$(systemctl is-active "$name" 2>/dev/null)" == active ]] \
+        && ok "service '$name' is running (systemd)" \
+        || fail "service '$name' is installed but NOT running (systemd) — start it"
+      [[ "$(systemctl is-enabled "$name" 2>/dev/null)" == enabled ]] \
+        && ok "service '$name' is enabled to start at boot" \
+        || warn "service '$name' is NOT enabled at boot — it won't return after a reboot"
+      break
+    done
+  elif command -v rc-service >/dev/null 2>&1; then
+    for name in $names; do
+      [[ -e /etc/init.d/$name ]] || continue
+      found=$name
+      rc-service "$name" status >/dev/null 2>&1 \
+        && ok "service '$name' is running (openrc)" \
+        || fail "service '$name' is installed but NOT running (openrc) — start it"
+      rc-update show 2>/dev/null | grep -qE "(^|[[:space:]])$name[[:space:]]" \
+        && ok "service '$name' is enabled to start at boot" \
+        || warn "service '$name' is NOT enabled at boot"
+      break
+    done
+  elif command -v sv >/dev/null 2>&1 && [[ -d /etc/sv ]]; then
+    for name in $names; do
+      [[ -d /etc/sv/$name ]] || continue
+      found=$name
+      sv status "$name" 2>/dev/null | grep -q '^run:' \
+        && ok "service '$name' is running (runit)" \
+        || fail "service '$name' is NOT running (runit)"
+      { [[ -L /var/service/$name || -L /etc/service/$name || -L /etc/runit/runsvdir/default/$name ]] } \
+        && ok "service '$name' is enabled to start at boot" \
+        || warn "service '$name' is NOT symlinked into the runsvdir (not boot-enabled)"
+      break
+    done
+  else
+    info "no recognised init/service manager here — skipping (run this on the server host)"
+    return
+  fi
+  [[ -n "$found" ]] || info "no breeze-core/meow-ac service found here — skipping (run on the server host)"
+}
+
 check_connectivity() {
   section "connectivity"
   info "base url: $BASE_URL"
@@ -727,6 +776,7 @@ interactive_menu() {
 
 load_config
 load_token_cache
+check_service          # host-local: service running + enabled at boot
 check_connectivity
 check_version          # health + build + feature list (key-only)
 check_auth

@@ -159,7 +159,10 @@ Both forms speak only HTTP (they never touch the server's internals), read
 `config.json` for the key, and share the same device-token cache
 (`~/.config/ac-diag/token`), so pairing once covers both.
 
-**`ac-diag.zsh`** checks, in one run: connectivity (`/api/health`), **server
+**`ac-diag` / `breeze-core diag`** checks, in one run: the **background
+service** (when run on the server host — is `breeze-core` running, and
+enabled to start at boot? detects systemd / OpenRC / runit / procd / Windows
+`sc`), connectivity (`/api/health`), **server
 version + build commit + advertised features** (`/api/version`), the auth
 posture (rejects no-key/wrong-key, and detects whether the control API is
 token-gated), **paired devices** with expiry warnings, **config
