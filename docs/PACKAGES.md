@@ -165,12 +165,15 @@ service — `sysrc breeze_core_enable=YES && service breeze_core start`
 (FreeBSD), `rcctl enable breeze_core && rcctl start breeze_core` (OpenBSD), or
 `breeze_core=YES` in `/etc/rc.conf` + `service breeze_core start` (NetBSD).
 
-All three are **exercised on real FreeBSD / OpenBSD / NetBSD VMs in CI**
-(`.github/workflows/bsd.yml`, via `vmactions`): install → `breeze-core
-version` → serve → `GET /api/health`, with FreeBSD also starting the rc
-service and building a **native `.pkg`** (`packaging/bsd/mkpkg-freebsd.sh`,
-uploaded as a CI artifact). The full CLI (`serve`/`pair`/`diag`/`approve`/…)
-and every API feature work exactly as on Linux.
+They're **exercised on real BSD VMs in CI** (`.github/workflows/bsd.yml`, via
+`vmactions`): install → `breeze-core version` → serve → `GET /api/health`,
+with FreeBSD also starting the rc service and building a **native `.pkg`**
+(`packaging/bsd/mkpkg-freebsd.sh`, uploaded as a CI artifact). **FreeBSD and
+NetBSD are the gating targets** (both pass — NetBSD on the stable 10.0 image);
+**OpenBSD is best-effort** and non-blocking (its from-source build needs Rust,
+which the CI image doesn't reliably ship). The full CLI
+(`serve`/`pair`/`diag`/`approve`/…) and every API feature work exactly as on
+Linux.
 
 **FreeBSD is verified on real hardware** (FreeBSD 15.1): the installer +
 rc.d service run, and `mkpkg-freebsd.sh` builds a **native `.pkg`** that
