@@ -27,7 +27,9 @@ jobs:
         with:
           release: "14.2"
           usesh: true
-          prepare: pkg install -y python311 py311-pip rust
+          # python3.12 ships pip via venv/ensurepip (no py3xx-pip package on
+          # FreeBSD); rust builds pydantic-core. Verified on real FreeBSD 15.1.
+          prepare: pkg install -y python312 rust
           run: |
             set -e
             sh packaging/bsd/install.sh
@@ -84,7 +86,11 @@ jobs:
         uses: vmactions/netbsd-vm@v1
         with:
           release: "10.0"
-          prepare: /usr/pkg/bin/pkgin -y install python311 py311-pip rust
+          # NetBSD 10.0 (stable) has python312 + rust as binary packages —
+          # unlike a fresh 11.0_RC whose repo is still being built out.
+          prepare: |
+            (command -v pkgin >/dev/null 2>&1 && pkgin -y install python312 rust) || \
+            pkg_add python312 rust
           run: |
             set -e
             sh packaging/bsd/install.sh

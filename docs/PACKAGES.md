@@ -170,5 +170,12 @@ All three are **exercised on real FreeBSD / OpenBSD / NetBSD VMs in CI**
 version` → serve → `GET /api/health`, with FreeBSD also starting the rc
 service and building a **native `.pkg`** (`packaging/bsd/mkpkg-freebsd.sh`,
 uploaded as a CI artifact). The full CLI (`serve`/`pair`/`diag`/`approve`/…)
-and every API feature work exactly as on Linux. Ports/pkgsrc submissions are
-welcome — `packaging/bsd/` has the rc scripts and installer to build on.
+and every API feature work exactly as on Linux.
+
+**FreeBSD is verified on real hardware** (FreeBSD 15.1): the installer +
+rc.d service run, and `mkpkg-freebsd.sh` builds a **native `.pkg`** that
+clean-installs via `pkg add` and serves — attached to releases and, once
+v3.0.0 is stable, served from a signed `pkg` repo. **NetBSD** needs a release
+whose pkgsrc binary repo actually carries `python312` + `rust` (a stable
+**10.0** does; a fresh **11.0-RC** repo may not yet). Ports/pkgsrc submissions
+are welcome — `packaging/bsd/` has the rc scripts and installer to build on.
