@@ -17,14 +17,19 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from meow_ac.devices import discovery
 from meow_ac.devices.control import apply_to_unit
+from meow_ac.devices.history import HistoryBuffer
 from meow_ac.devices.manager import DeviceManager
-from meow_ac.devices.schemas import ControlRequest, serialize
+from meow_ac.devices.schemas import ControlRequest, serialize, serialize_capabilities
 from meow_ac.security.base import Authenticator
 
 log = logging.getLogger("meow-ac")
 
 
-def build_router(manager: DeviceManager, authenticator: Authenticator) -> APIRouter:
+def build_router(
+    manager: DeviceManager,
+    authenticator: Authenticator,
+    history: HistoryBuffer,
+) -> APIRouter:
     # Auth is applied to the whole router, so every /api/* route is
     # protected by construction — you can't forget it on a new endpoint.
     router = APIRouter(prefix="/api", dependencies=[Depends(authenticator)])
@@ -57,7 +62,9 @@ def build_router(manager: DeviceManager, authenticator: Authenticator) -> APIRou
                 try:
                     device = await manager.get(unit_id)
                     await device.refresh()
-                    return ("ok", serialize(manager.unit_config(unit_id), device))
+                    state = serialize(manager.unit_config(unit_id), device)
+                    history.record(state)
+                    return ("ok", state)
                 except Exception:
                     log.warning("batch refresh failed for %s", unit_id)
                     return ("err", {"id": unit_id, "name": unit.name, "ip": unit.ip,
@@ -113,7 +120,31 @@ def build_router(manager: DeviceManager, authenticator: Authenticator) -> APIRou
             except Exception:
                 log.exception("refresh failed for %s", unit_id)
                 raise HTTPException(503, "couldn't reach that unit")
-            return serialize(manager.unit_config(unit_id), device)
+            state = serialize(manager.unit_config(unit_id), device)
+            history.record(state)
+            return state
+
+    @router.get("/units/{unit_id}/capabilities")
+    async def unit_capabilities(unit_id: str):
+        """What the unit's firmware actually supports (modes, flap axes,
+        eco/turbo, temp range, …) so clients can hide controls it lacks."""
+        async with manager.lock_for(unit_id):
+            try:
+                device = await manager.get(unit_id)
+            except HTTPException:
+                raise
+            except Exception:
+                log.exception("capabilities fetch failed for %s", unit_id)
+                raise HTTPException(503, "couldn't reach that unit")
+            return serialize_capabilities(manager.unit_config(unit_id), device)
+
+    @router.get("/units/{unit_id}/history")
+    async def unit_history(unit_id: str):
+        """Recent in-memory readings for this unit (for a client-side graph).
+        Best-effort and non-persistent — empty until the unit's been polled."""
+        if manager.unit_config(unit_id) is None:
+            raise HTTPException(404, f"no unit '{unit_id}'")
+        return {"id": unit_id, "samples": history.samples(unit_id)}
 
     @router.post("/units/{unit_id}/control")
     async def unit_control(unit_id: str, req: ControlRequest):

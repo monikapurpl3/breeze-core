@@ -55,6 +55,7 @@ headers on, LAN-only approval).
 | `AC_CODE_TTL` | `60` | pairing-code lifetime (seconds) |
 | `AC_TOKEN_TTL_DAYS` | `90` | device-token lifetime; `0` = never expires |
 | `AC_MIN_AUTH_VERSION` | `1` | minimum device auth-version accepted (see [Authentication](#authentication-device-pairing)). `1` = accept legacy bearer **and** Ed25519 v2; `2` = refuse v1 with 426 |
+| `AC_HISTORY_SIZE` | `720` | per-unit in-memory history samples kept for `/history` and `/metrics` (~1h at the app's 5s poll) |
 
 > Point them at your chosen config dir, e.g.
 > `AC_CONFIG=/etc/breeze-core/config.json` — `AC_DEVICES`/`AC_PROGRAMS` then
@@ -164,6 +165,9 @@ POST /api/auth/enroll/poll      X-API-Key       → {status, token_id, label, au
 POST /api/auth/enroll/approve   X-API-Key + LAN → {token_id, label}                    (admin)
 POST /api/auth/upgrade          X-API-Key + cred → {token_id, auth_version:2}
                                   body {public_key}; re-keys the calling device to v2 in place
+GET  /api/auth/whoami           X-API-Key + cred → {token_id, label, auth_version,
+                                                     created_at, expires_at, last_used}
+                                  (the *calling* device; not LAN-gated)
 GET  /api/auth/devices          X-API-Key + LAN → [{token_id, label, auth_version, created_at, ...}]  (admin)
 DELETE /api/auth/devices/{id}   X-API-Key + LAN → 204                                   (admin)
 ```
@@ -176,6 +180,8 @@ Health is public; version needs the API key.
 GET   /api/health               → {status:"ok"}                 (public liveness probe)
 GET   /api/version   X-API-Key  → {name, version, commit, features[],
                                     auth_versions:[1,2], min_auth_version, units}   (feature-detect)
+GET   /metrics       X-API-Key  → Prometheus text: unit online/temps (last known,
+                                    no live fetch) + scheduler counters + build info
 ```
 
 ### Units — `/api/units`
@@ -188,6 +194,11 @@ GET    /api/units/state         → {states:[…], errors:[{id,name,ip,detail}]}
                                    fanned out concurrently; unreachable units → online:false
                                    in states, or in errors — never 503s the whole batch)
 GET    /api/units/{id}/state    → full state (connects + refreshes the unit)
+GET    /api/units/{id}/capabilities → what the unit supports (see below) — lets
+                                   clients hide controls the hardware lacks
+GET    /api/units/{id}/history  → {id, samples:[…]} recent in-memory readings
+                                   (indoor/outdoor/target/mode/power) for a graph;
+                                   best-effort, non-persistent, empty until polled
 POST   /api/units/{id}/control  → full state (applies only the fields present)
 PATCH  /api/units/{id}          → rename a unit (body {name}) → sanitized unit view
 GET    /api/units/scan          → {subnet, candidates:[{ip, port, known}]}  (LAN TCP scan
@@ -212,6 +223,21 @@ State object:
 Errors: `401` bad key/credential · `404` unknown unit · `422` out-of-range value ·
 `426` device auth-version below `min_auth_version` (upgrade the client) ·
 `503` unreachable/apply-failed.
+
+Capabilities object (`GET /api/units/{id}/capabilities`) — from msmart's
+`get_capabilities()`, read defensively (a field is `null` when the
+firmware/msmart doesn't report it, so clients "show it" rather than wrongly
+hide it):
+
+```json
+{ "id":"…","operational_modes":["AUTO","COOL","DRY","HEAT","FAN_ONLY"],
+  "swing_modes":["OFF","VERTICAL","BOTH"],
+  "supports_vertical_swing":true,"supports_horizontal_swing":false,
+  "fan_speeds":["LOW","MEDIUM","HIGH","AUTO"],"supports_custom_fan_speed":true,
+  "min_target_temperature":16.0,"max_target_temperature":30.0,
+  "supports_eco":true,"supports_turbo":true,"supports_display_control":true,
+  "supports_freeze_protection":false,"supports_humidity":false }
+```
 
 ### Programs — `/api/programs`
 

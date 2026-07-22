@@ -197,3 +197,34 @@ def test_v2_device_cannot_downgrade_to_bearer(tmp_path):
     tid = _enroll_v2(c, ref)
     # try to use the key_id as if it were a bearer token → rejected
     assert c.get("/api/units", headers={**KEY, "Authorization": f"Bearer {tid}"}).status_code == 401
+
+
+# --- v3.0.0 extras (whoami / metrics / history) ------------------------------
+
+def test_whoami_reports_the_calling_device(tmp_path):
+    c = _make_app(tmp_path)
+    ref = RefClient()
+    tid = _enroll_v2(c, ref)
+    h = {**KEY, **ref.sign_headers("GET", "/api/auth/whoami", b"")}
+    r = c.get("/api/auth/whoami", headers=h)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["token_id"] == tid and body["auth_version"] == 2
+    assert "label" in body and "expires_at" in body
+
+
+def test_metrics_endpoint_needs_key_and_reports_build(tmp_path):
+    c = _make_app(tmp_path)
+    assert c.get("/metrics").status_code == 401           # no key
+    r = c.get("/metrics", headers=KEY)
+    assert r.status_code == 200
+    assert "breeze_build_info" in r.text
+    assert "breeze_units_total" in r.text
+
+
+def test_history_unknown_unit_404(tmp_path):
+    c = _make_app(tmp_path)
+    ref = RefClient()
+    _enroll_v2(c, ref)
+    h = {**KEY, **ref.sign_headers("GET", "/api/units/nope/history", b"")}
+    assert c.get("/api/units/nope/history", headers=h).status_code == 404

@@ -160,6 +160,24 @@ def build_auth_router(
         log.info("enrollment approved: %s (%s)", record.label, record.token_id)
         return {"token_id": record.token_id, "label": record.label}
 
+    @router.get("/whoami", dependencies=[Depends(api_key_auth), Depends(device_auth)])
+    async def whoami(request: Request):
+        """Describe the calling device (from its own credential). Not
+        LAN-gated — a device may always ask about itself. Lets a client show
+        'this device' and warn before its token expires."""
+        token_id = getattr(request.state, "device_token_id", None)
+        record = token_store.get(token_id) if token_id else None
+        if record is None:
+            raise HTTPException(401, "no authenticated device")
+        return {
+            "token_id": record.token_id,
+            "label": record.label,
+            "auth_version": record.auth_version,
+            "created_at": record.created_at,
+            "expires_at": record.expires_at,
+            "last_used": record.last_used,
+        }
+
     @router.post("/upgrade", dependencies=[Depends(api_key_auth), Depends(device_auth)])
     async def upgrade_device(req: UpgradeRequest, request: Request):
         """Migrate the *calling* device from bearer (v1) to Ed25519 (v2) in

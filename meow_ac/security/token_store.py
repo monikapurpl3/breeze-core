@@ -119,6 +119,14 @@ class TokenStore:
             return None
         return match
 
+    def get(self, token_id: str) -> Optional[DeviceRecord]:
+        """Return the record for a token_id regardless of auth version, or
+        None. Used by /api/auth/whoami to describe the calling device."""
+        for record in self.doc.devices:
+            if record.token_id == token_id:
+                return record
+        return None
+
     def find_by_key_id(self, token_id: str) -> Optional[DeviceRecord]:
         """Return the (unexpired) v2 record named by `token_id`, or None.
 

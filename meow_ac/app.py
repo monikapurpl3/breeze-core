@@ -37,9 +37,11 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from meow_ac.api import auth as auth_api
 from meow_ac.api import config as config_api
 from meow_ac.api import meta as meta_api
+from meow_ac.api import metrics as metrics_api
 from meow_ac.api import programs as programs_api
 from meow_ac.api import units as units_api
 from meow_ac.config.store import ConfigStore
+from meow_ac.devices.history import HistoryBuffer
 from meow_ac.devices.manager import DeviceManager
 from meow_ac.programs.scheduler import Scheduler
 from meow_ac.programs.store import ProgramStore
@@ -76,6 +78,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     program_store = ProgramStore(settings.programs_path)
     program_store.load()
     manager = DeviceManager(store)
+    history = HistoryBuffer(size=settings.history_size)
     enrollment = EnrollmentService(
         token_store,
         code_ttl_seconds=settings.code_ttl_seconds,
@@ -155,7 +158,8 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
             token_store, enrollment, settings, api_key_auth, device_auth
         )
     )
-    app.include_router(units_api.build_router(manager, full_auth))
+    app.include_router(units_api.build_router(manager, full_auth, history))
+    app.include_router(metrics_api.build_metrics_router(api_key_auth, manager, history, scheduler))
     app.include_router(config_api.build_config_router(store, manager, full_auth))
     app.include_router(
         programs_api.build_programs_router(manager, program_store, scheduler, full_auth)

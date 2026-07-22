@@ -72,6 +72,10 @@ FEATURES = [
     "ed25519_auth",     # auth_version 2: Ed25519 request signing + /api/auth/upgrade
     "unit_scan",        # GET /api/units/scan — LAN TCP scan for add-from-scan
     "beep_control",     # POST /control honours an optional `beep` field
+    "unit_capabilities",  # GET /api/units/{id}/capabilities
+    "unit_history",     # GET /api/units/{id}/history (in-memory samples)
+    "whoami",           # GET /api/auth/whoami
+    "metrics",          # GET /metrics (Prometheus, API-key gated)
 ]
 
 # Device auth-versions this build understands. A client feature-detects v2
