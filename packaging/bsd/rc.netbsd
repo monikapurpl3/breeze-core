@@ -11,11 +11,19 @@ $_rc_subr_loaded . /etc/rc.subr
 name=breeze_core
 rcvar=$name
 pidfile=/var/run/${name}.pid
+logfile=/var/log/${name}.log
 start_cmd=breeze_start
 stop_cmd=breeze_stop
+status_cmd=breeze_status
+extra_commands="status"
 
 _appdir=/usr/pkg/breeze-core
 _etcdir=/usr/pkg/etc/breeze-core
+
+breeze_running()
+{
+	[ -r "${pidfile}" ] && kill -0 "$(cat "${pidfile}")" 2>/dev/null
+}
 
 breeze_start()
 {
@@ -23,22 +31,47 @@ breeze_start()
 	BREEZE_PORT=8420
 	BREEZE_OPTS=""
 	[ -r "${_etcdir}/breeze-core.env" ] && . "${_etcdir}/breeze-core.env"
+	if breeze_running; then
+		echo "${name} already running (pid $(cat "${pidfile}"))."
+		return 0
+	fi
 	echo "Starting ${name}."
+	# The pidfile and log live in root-owned dirs (/var/run, /var/log), but the
+	# server runs as the unprivileged 'breeze' user — so root (this rc script)
+	# pre-creates both and hands ownership to breeze. That's what lets the
+	# backgrounded app write its log and record its own pid; doing those writes
+	# inside the su(1) as breeze fails with EACCES.
+	rm -f "${pidfile}"
+	touch "${pidfile}" "${logfile}"
+	chown breeze "${pidfile}" "${logfile}"
 	su -m breeze -c "env PYTHONPATH=${_appdir} \
 	  AC_CONFIG=${_etcdir}/config.json \
 	  AC_DEVICES=${_etcdir}/devices.json \
 	  AC_PROGRAMS=${_etcdir}/programs.json \
 	  ${_appdir}/venv/bin/python -m meow_ac.cli serve \
 	  --host ${BREEZE_HOST} --port ${BREEZE_PORT} ${BREEZE_OPTS} \
-	  >> /var/log/${name}.log 2>&1 & echo \$! > ${pidfile}"
+	  >> ${logfile} 2>&1 & echo \$! > ${pidfile}"
 }
 
 breeze_stop()
 {
-	if [ -r "${pidfile}" ]; then
+	if breeze_running; then
 		echo "Stopping ${name}."
 		kill "$(cat "${pidfile}")" 2>/dev/null || true
 		rm -f "${pidfile}"
+	else
+		echo "${name} not running."
+		rm -f "${pidfile}"
+	fi
+}
+
+breeze_status()
+{
+	if breeze_running; then
+		echo "${name} is running as pid $(cat "${pidfile}")."
+	else
+		echo "${name} is not running."
+		return 1
 	fi
 }
 

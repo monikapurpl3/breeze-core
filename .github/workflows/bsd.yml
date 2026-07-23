@@ -88,24 +88,34 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v5
-      - name: NetBSD — install + serve + health
+      - name: NetBSD — install, rc.d service, health
         uses: vmactions/netbsd-vm@v1
         with:
           release: "10.0"
-          # NetBSD 10.0 (stable) has python312 + rust as binary packages —
+          # NetBSD 10.x (stable) has python312 + rust as binary packages —
           # unlike a fresh 11.0_RC whose repo is still being built out.
+          # Verified live on real NetBSD 10.1 (192.168.1.94).
           prepare: |
             (command -v pkgin >/dev/null 2>&1 && pkgin -y install python312 rust) || \
             pkg_add python312 rust
+          # Exercise the rc.d service (not just `serve`) — an earlier bug where
+          # rc.netbsd wrote its pidfile/log as the unprivileged user (EACCES on
+          # /var/run, /var/log) slipped through precisely because CI only ran
+          # `serve` directly. The service path is what users actually use.
           run: |
             set -e
             sh packaging/bsd/install.sh
             breeze-core version
-            /usr/pkg/breeze-core/venv/bin/python -m meow_ac.cli serve --host 127.0.0.1 --port 8420 >/tmp/s.log 2>&1 &
-            sleep 8
+            printf '{"api_key":"k","units":[]}' > /usr/pkg/etc/breeze-core/config.json
+            chown breeze /usr/pkg/etc/breeze-core/config.json
+            echo breeze_core=YES >> /etc/rc.conf
+            service breeze_core start
+            sleep 7
+            service breeze_core status
             /usr/pkg/breeze-core/venv/bin/python - <<'PY'
             import sys, urllib.request
             b = urllib.request.urlopen("http://127.0.0.1:8420/api/health", timeout=8).read()
             print("health:", b)
             sys.exit(0 if b'"ok"' in b else 1)
             PY
+            service breeze_core stop || true
