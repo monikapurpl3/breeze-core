@@ -54,6 +54,9 @@ headers on, LAN-only approval).
 | `AC_ENROLL_LAN_ONLY` | on | pairing approval must come from a private/LAN address |
 | `AC_CODE_TTL` | `60` | pairing-code lifetime (seconds) |
 | `AC_TOKEN_TTL_DAYS` | `90` | device-token lifetime; `0` = never expires |
+| `AC_MIN_AUTH_VERSION` | `1` | minimum device auth-version accepted (see [Authentication](#authentication-device-pairing)). `1` = accept legacy bearer **and** Ed25519 v2; `2` = refuse v1 with 426 |
+| `AC_HISTORY_SIZE` | `720` | per-unit in-memory history samples kept for `/history` and `/metrics` (~1h at the app's 5s poll) |
+| `AC_STREAM_TICK` | `5` | how often the SSE broadcaster (`/api/units/stream`) polls the units while ≥1 client is connected (seconds) |
 
 > Point them at your chosen config dir, e.g.
 > `AC_CONFIG=/etc/breeze-core/config.json` — `AC_DEVICES`/`AC_PROGRAMS` then
@@ -73,15 +76,76 @@ shared password rides on every request:
    short, single-use **code** (~60 s).
 3. An **admin on the LAN** approves that code (via `tools/ac-approve.zsh` or
    `POST /api/auth/enroll/approve`).
-4. The client polls `/api/auth/enroll/poll` and receives a **per-device
-   token** — 256-bit, stored **hashed**, individually named, revocable, and
-   expiring.
-5. **Control endpoints require the API key *and* a valid device token.**
+4. The client polls `/api/auth/enroll/poll` and is bound to a **per-device
+   credential** — individually named, revocable, and expiring.
+5. **Control endpoints require the API key *and* a valid device credential.**
    Approval and device management are admin-only and restricted to the local
    network.
 
-Rotating the `api_key` doesn't log devices out (tokens are independent);
-revoke a single lost device with `ac-approve.zsh revoke <token_id>`.
+Rotating the `api_key` doesn't log devices out (device credentials are
+independent); revoke a single lost device with
+`ac-approve.zsh revoke <token_id>`.
+
+### Auth versions (the device credential)
+
+A device is pinned to the credential profile it enrolled with. The server
+advertises which it supports in `GET /api/version`
+(`auth_versions`, `min_auth_version`).
+
+**v2 — Ed25519 request signing (current, recommended).** The client generates
+an Ed25519 keypair; the private key never leaves the device and the server
+stores **only the public key** — so a `devices.json` leak yields nothing an
+attacker can use. Each request is signed over a canonical string binding the
+method, path, timestamp, a single-use nonce, and a **SHA3-512 digest of the
+body**, sent as headers:
+
+```
+X-Breeze-Auth-Version: 2
+X-Breeze-Key-Id:       <token_id>            # names the device (not secret)
+X-Breeze-Timestamp:    <unix seconds>        # must be within ±60 s of the server
+X-Breeze-Nonce:        <base64url, 16 bytes> # single-use within the window
+X-Breeze-Signature:    <base64url Ed25519 sig>
+#   signed message =
+#   "breeze-auth-v2\n{METHOD}\n{path?query}\n{timestamp}\n{nonce}\n{sha3_512(body) hex}"
+```
+
+The timestamp + nonce give replay protection; the body digest gives tamper
+protection. At enrollment (`auth_version: 2`) the client sends its
+`public_key` in `enroll/start`; nothing secret is ever returned by `poll`.
+
+**v1 — bearer token (legacy).** `Authorization: Bearer <token>`; the token is
+256-bit random, shown once at enrollment, and stored only as a SHA-256 hash.
+Still fully supported.
+
+### Rollout and in-place upgrade
+
+`AC_MIN_AUTH_VERSION` (default `1`) is the clamp. At `1`, both v1 and v2
+devices work — a **new device may still enrol as either** (the web UI and the
+zsh/binary CLIs are v1-only, so this must stay open by default), and
+v1-authenticated responses carry an advisory `X-Breeze-Upgrade:
+auth-version=2` header. Raise it to `2` once your clients are updated and v1
+is fully closed:
+
+- v1 **control** requests are refused with **`426 Upgrade Required`** + a
+  human-readable message (which even an un-updated client surfaces).
+- v1 **enrollment** is refused too — `enroll/start` with `auth_version` below
+  the floor returns `426`, so no new legacy credential is ever minted (not
+  even a dead one that would be clamped on its first call).
+
+So a clamped server effectively runs v2-only: existing v1 devices must
+upgrade, and no new v1 device can be created. **Migrate the web UI and CLIs
+before raising the clamp** — they can't do v2 yet.
+
+An enrolled v1 device upgrades to v2 **in place** — `POST /api/auth/upgrade`,
+authenticated by its *existing* credential, registers a freshly-generated
+public key and keeps the same `token_id`. No re-pairing and no admin
+re-approval (it re-keys a device that already proved possession, trusting
+nobody new). The Breeze app does this automatically on first launch after an
+update.
+
+> The bundled web UI and the diagnostic CLIs remain **v1 clients** for now;
+> they keep working while `AC_MIN_AUTH_VERSION=1` (the default). Migrate them
+> before raising the clamp to `2`.
 
 ---
 
@@ -96,9 +160,16 @@ comparisons are constant-time. Responses are compressed with **brotli**
 
 ```
 POST /api/auth/enroll/start     X-API-Key       → {session_id, user_code, expires_in}
-POST /api/auth/enroll/poll      X-API-Key       → {status[, device_token, token_id, label, expires_at]}
+                                  body {label, auth_version?, public_key?}  (public_key for v2)
+POST /api/auth/enroll/poll      X-API-Key       → {status, token_id, label, auth_version,
+                                                    expires_at[, device_token]}  (token: v1 only)
 POST /api/auth/enroll/approve   X-API-Key + LAN → {token_id, label}                    (admin)
-GET  /api/auth/devices          X-API-Key + LAN → [{token_id, label, created_at, ...}]  (admin)
+POST /api/auth/upgrade          X-API-Key + cred → {token_id, auth_version:2}
+                                  body {public_key}; re-keys the calling device to v2 in place
+GET  /api/auth/whoami           X-API-Key + cred → {token_id, label, auth_version,
+                                                     created_at, expires_at, last_used}
+                                  (the *calling* device; not LAN-gated)
+GET  /api/auth/devices          X-API-Key + LAN → [{token_id, label, auth_version, created_at, ...}]  (admin)
 DELETE /api/auth/devices/{id}   X-API-Key + LAN → 204                                   (admin)
 ```
 
@@ -108,7 +179,10 @@ Health is public; version needs the API key.
 
 ```
 GET   /api/health               → {status:"ok"}                 (public liveness probe)
-GET   /api/version   X-API-Key  → {name, version, commit, features[], units}   (feature-detect)
+GET   /api/version   X-API-Key  → {name, version, commit, features[],
+                                    auth_versions:[1,2], min_auth_version, units}   (feature-detect)
+GET   /metrics       X-API-Key  → Prometheus text: unit online/temps (last known,
+                                    no live fetch) + scheduler counters + build info
 ```
 
 ### Units — `/api/units`
@@ -121,8 +195,19 @@ GET    /api/units/state         → {states:[…], errors:[{id,name,ip,detail}]}
                                    fanned out concurrently; unreachable units → online:false
                                    in states, or in errors — never 503s the whole batch)
 GET    /api/units/{id}/state    → full state (connects + refreshes the unit)
+GET    /api/units/{id}/capabilities → what the unit supports (see below) — lets
+                                   clients hide controls the hardware lacks
+GET    /api/units/{id}/history  → {id, samples:[…]} recent in-memory readings
+                                   (indoor/outdoor/target/mode/power) for a graph;
+                                   best-effort, non-persistent, empty until polled
+GET    /api/units/stream        → text/event-stream: live per-unit state pushed
+                                   as it changes (SSE). `event: state` frames +
+                                   `: keepalive` comments. See "Live updates" below.
 POST   /api/units/{id}/control  → full state (applies only the fields present)
 PATCH  /api/units/{id}          → rename a unit (body {name}) → sanitized unit view
+GET    /api/units/scan          → {subnet, candidates:[{ip, port, known}]}  (LAN TCP scan
+                                   of ports 6440–6449; ?subnet=CIDR override, ?timeout=;
+                                   read-only — adding still goes through POST /api/units)
 POST   /api/units               → add a unit by LAN IP (body {ip, name?}); discovers
                                    it and writes config.json → 201 sanitized unit view
 DELETE /api/units/{id}          → remove a unit from config → 204
@@ -139,8 +224,50 @@ State object:
   "fan_speed":102,"swing_mode":"BOTH","eco":false,"turbo":false }
 ```
 
-Errors: `401` bad key/token · `404` unknown unit · `422` out-of-range value ·
+Errors: `401` bad key/credential · `404` unknown unit · `422` out-of-range value ·
+`426` device auth-version below `min_auth_version` (upgrade the client) ·
 `503` unreachable/apply-failed.
+
+Capabilities object (`GET /api/units/{id}/capabilities`) — from msmart's
+`get_capabilities()`, read defensively (a field is `null` when the
+firmware/msmart doesn't report it, so clients "show it" rather than wrongly
+hide it):
+
+```json
+{ "id":"…","operational_modes":["AUTO","COOL","DRY","HEAT","FAN_ONLY"],
+  "swing_modes":["OFF","VERTICAL","BOTH"],
+  "supports_vertical_swing":true,"supports_horizontal_swing":false,
+  "fan_speeds":["LOW","MEDIUM","HIGH","AUTO"],"supports_custom_fan_speed":true,
+  "min_target_temperature":16.0,"max_target_temperature":30.0,
+  "supports_eco":true,"supports_turbo":true,"supports_display_control":true,
+  "supports_freeze_protection":false,"supports_humidity":false }
+```
+
+### Live updates — `/api/units/stream` (SSE)
+
+`GET /api/units/stream` is a **Server-Sent Events** stream (full auth, same as
+the other unit routes). Instead of each client polling, the server polls the
+units **once** (only while ≥1 client is connected) and fans changes out to all
+streams — the app can drop its own poll loop (battery), and a change made by a
+schedule or another client shows up on the next tick.
+
+```
+: connected                       ← sent immediately on open
+event: state                      ← one frame per unit, whenever it changes
+data: {"id":"…","online":true, … same shape as GET /state}
+
+: keepalive                       ← comment every ~15 s to hold the connection
+```
+
+Notes:
+- It pushes the same state object as `/state`; a client applies each frame to
+  its cached unit. Cadence while connected is `AC_STREAM_TICK` (default 5 s) —
+  Midea units have no push, so the server still polls them; SSE only
+  centralises that polling.
+- **Compression is disabled** for this route (`Content-Encoding: identity`),
+  so a client that can't decode brotli still reads it; the response also sets
+  `X-Accel-Buffering: no` so nginx doesn't buffer it (see
+  [REVERSE-PROXY.md](REVERSE-PROXY.md)).
 
 ### Programs — `/api/programs`
 
@@ -176,6 +303,8 @@ Used identically by the API, the web UI, the app, and the diagnostic CLI:
 | `swing_mode` | `OFF` `VERTICAL` `HORIZONTAL` `BOTH` — two physical flaps; an unsupported one is silently ignored by firmware |
 | `target_temperature` | `16.0`–`30.0` in `0.5°` steps (Celsius on the wire; clients may display °F) |
 | `fan_speed` | `20` / `40` / `60` / `80` / `100`, plus `102` = auto |
+| `beep` | optional `bool` on `POST /control` only — whether the unit chirps on accept. Omitted ⇒ silent. Not part of the returned state. |
 
-`POST /control` applies only the fields present in the body, and always sets
-`beep = false`.
+`POST /control` applies only the fields present in the body. `beep` defaults
+to `false` when omitted (so schedules/curves and older clients stay quiet); a
+client sends `beep: true` to make the unit chirp on accept.

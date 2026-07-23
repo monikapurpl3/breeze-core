@@ -38,8 +38,14 @@ class _Session:
     code_hash: str
     label: str
     expires_at: float
+    # Auth profile this client is enrolling for. v1 → a bearer token is
+    # minted and handed out once. v2 → the client already generated an
+    # Ed25519 keypair and gave us its public key; nothing secret is minted
+    # or returned (the private key never leaves the device).
+    auth_version: int = 1
+    public_key: Optional[str] = None
     approved: bool = False
-    # Populated on approval, handed out exactly once by poll().
+    # Populated on approval. `token` is the one-time bearer for v1 only.
     token: Optional[str] = None
     record: Optional[DeviceRecord] = field(default=None)
 
@@ -58,10 +64,19 @@ class EnrollmentService:
 
     # -- step 1: a client requests enrollment -------------------------
 
-    def start(self, label: str) -> Tuple[str, str, int]:
+    def start(
+        self,
+        label: str,
+        auth_version: int = 1,
+        public_key: Optional[str] = None,
+    ) -> Tuple[str, str, int]:
         """Open a pending session. Returns (session_id, user_code,
         expires_in_seconds). The user_code is shown to the human; only
-        its hash is retained."""
+        its hash is retained.
+
+        For auth_version 2 the client supplies its Ed25519 `public_key` here;
+        it's validated by the caller (the API layer) before we get it.
+        """
         self._sweep()
         session_id = secrets.token_urlsafe(18)
         user_code = crypto.new_pairing_code()
@@ -69,6 +84,8 @@ class EnrollmentService:
             code_hash=crypto.hash_secret(crypto.normalize_code(user_code)),
             label=label.strip() or "unnamed device",
             expires_at=time.time() + self._code_ttl,
+            auth_version=auth_version,
+            public_key=public_key,
         )
         return session_id, user_code, self._code_ttl
 
@@ -88,16 +105,31 @@ class EnrollmentService:
         if matched is None:
             return None
 
-        token = crypto.new_device_token()
         now = time.time()
         expires_at = None if self._token_ttl_days <= 0 else now + self._token_ttl_days * 86400
-        record = DeviceRecord(
-            token_id=secrets.token_hex(8),
-            label=matched.label,
-            token_hash=crypto.hash_secret(token),
-            created_at=now,
-            expires_at=expires_at,
-        )
+        token: Optional[str] = None
+        if matched.auth_version == 2:
+            # v2: store only the client's public key. Nothing secret is
+            # minted or handed back — the device signs with its private key.
+            record = DeviceRecord(
+                token_id=secrets.token_hex(8),
+                label=matched.label,
+                auth_version=2,
+                public_key=matched.public_key,
+                created_at=now,
+                expires_at=expires_at,
+            )
+        else:
+            # v1: mint a bearer token, store only its hash, hand it out once.
+            token = crypto.new_device_token()
+            record = DeviceRecord(
+                token_id=secrets.token_hex(8),
+                label=matched.label,
+                auth_version=1,
+                token_hash=crypto.hash_secret(token),
+                created_at=now,
+                expires_at=expires_at,
+            )
         self._tokens.add(record)
 
         matched.approved = True

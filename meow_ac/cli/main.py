@@ -149,6 +149,9 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--pair", action="store_true", help="force a fresh self-enrolment")
     s.add_argument("--no-pair", action="store_true", help="never self-enrol; skip token-gated checks")
     s.add_argument("--forget-token", action="store_true", help="delete the cached device token and exit")
+    s.add_argument("--service-name", default="",
+                   help="extra service name to check for the background-service test "
+                        "(default: breeze-core, then meow-ac)")
     s.set_defaults(func=cmd_diag)
 
     s = sub.add_parser("approve", help="approve a device pairing code (admin, LAN-only)")

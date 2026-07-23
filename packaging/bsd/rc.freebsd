@@ -1,0 +1,39 @@
+#!/bin/sh
+# Breeze Core — FreeBSD rc.d service (installed by packaging/bsd/install.sh to
+# /usr/local/etc/rc.d/breeze_core). Runs the venv app as the unprivileged
+# `breeze` user via daemon(8). Strongest isolation on FreeBSD is a thin jail —
+# see HARDENING.md §7.
+#
+# PROVIDE: breeze_core
+# REQUIRE: NETWORKING
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name=breeze_core
+rcvar=breeze_core_enable
+load_rc_config $name
+: ${breeze_core_enable:=NO}
+
+_appdir=/usr/local/breeze-core
+_etcdir=/usr/local/etc/breeze-core
+
+# Defaults, overridable from ${_etcdir}/breeze-core.env
+BREEZE_HOST=127.0.0.1
+BREEZE_PORT=8420
+BREEZE_OPTS=""
+[ -r "${_etcdir}/breeze-core.env" ] && . "${_etcdir}/breeze-core.env"
+
+pidfile=/var/run/${name}.pid
+command=/usr/sbin/daemon
+command_args="-f -u breeze -o /var/log/${name}.log -P ${pidfile} \
+  ${_appdir}/venv/bin/python -m meow_ac.cli serve \
+  --host ${BREEZE_HOST} --port ${BREEZE_PORT} ${BREEZE_OPTS}"
+
+# The app is imported from _appdir; state lives in _etcdir.
+breeze_core_env="PYTHONPATH=${_appdir} \
+  AC_CONFIG=${_etcdir}/config.json \
+  AC_DEVICES=${_etcdir}/devices.json \
+  AC_PROGRAMS=${_etcdir}/programs.json"
+
+run_rc_command "$1"

@@ -82,6 +82,21 @@ class Settings:
     # Lifetime of a minted device token; 0 = never expires.
     token_ttl_days: int = 90
 
+    # Per-unit in-memory history ring size (samples kept for /history and the
+    # last-known values in /metrics). ~720 ≈ an hour at the app's 5 s poll.
+    history_size: int = 720
+
+    # How often the SSE broadcaster polls the units while ≥1 client is
+    # streaming (seconds). Matches the app's old poll cadence.
+    stream_tick_seconds: int = 5
+
+    # Minimum device auth-version accepted on control routes. 1 (default)
+    # accepts both the legacy bearer scheme and v2 Ed25519 request signing —
+    # a soft rollout where old clients keep working and are nudged to
+    # upgrade. Raise to 2 (AC_MIN_AUTH_VERSION=2) once the app upgrade is
+    # widespread to hard-refuse v1 with a 426 (clients are told to update).
+    min_auth_version: int = 1
+
     @classmethod
     def from_env(cls) -> "Settings":
         config_path = Path(os.environ.get("AC_CONFIG", str(DEFAULT_CONFIG_PATH)))
@@ -108,4 +123,7 @@ class Settings:
             enrollment_lan_only=_env_bool("AC_ENROLL_LAN_ONLY", True),
             code_ttl_seconds=_env_int("AC_CODE_TTL", 60),
             token_ttl_days=_env_int("AC_TOKEN_TTL_DAYS", 90),
+            min_auth_version=_env_int("AC_MIN_AUTH_VERSION", 1),
+            history_size=_env_int("AC_HISTORY_SIZE", 720),
+            stream_tick_seconds=_env_int("AC_STREAM_TICK", 5),
         )

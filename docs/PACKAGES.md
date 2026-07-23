@@ -13,7 +13,7 @@ compile, no Python to install, no venv.
 [NixOS / Nix](#nixos--nix) ·
 [For packagers](#source-recipes-for-packagers) ·
 [OpenWrt](#openwrt) ·
-[BSDs](#freebsd-netbsd)
+[BSDs](#freebsd-openbsd-netbsd)
 
 ## The package repository (recommended)
 
@@ -142,8 +142,45 @@ for exactly this reason). Other router architectures (mips, arm32) can't fit
 or run the self-contained bundle — for those, nothing beats a small x86/ARM64
 box next to the router.
 
-## FreeBSD, NetBSD
+## FreeBSD, OpenBSD, NetBSD
 
-No prebuilt packages (different kernel — the Linux bundles can't run) — the
-[source install](INSTALL.md#freebsd-and-other-bsds) works today on the BSDs.
-Native `.pkg` builds via poudriere are planned.
+The Linux self-contained bundles are Linux ELF binaries — they can't run on a
+BSD kernel (and a container can't help, since it shares the host's Linux
+kernel). So BSD installs **from source** into a private virtualenv: the same
+`meow_ac.app:app`, built on the host. One command from a checkout (or the
+source tarball) does the lot — service user, venv + deps, a `breeze-core`
+wrapper, the rc.d service, and the env file:
+
+```sh
+# FreeBSD:  pkg install -y python311 py311-pip rust
+# OpenBSD:  pkg_add python%3.11 rust
+# NetBSD:   pkgin -y install python311 py311-pip rust
+#   (rust builds pydantic-core; a C compiler ships in base)
+
+doas sh packaging/bsd/install.sh     # OpenBSD (or `sudo`/`su` on FreeBSD/NetBSD)
+```
+
+Then `breeze-core pair`, set `BREEZE_HOST` in the env file, and enable the
+service — `sysrc breeze_core_enable=YES && service breeze_core start`
+(FreeBSD), `rcctl enable breeze_core && rcctl start breeze_core` (OpenBSD), or
+`breeze_core=YES` in `/etc/rc.conf` + `service breeze_core start` (NetBSD).
+
+They're **exercised on real BSD VMs in CI** (`.github/workflows/bsd.yml`, via
+`vmactions`): install → `breeze-core version` → serve → `GET /api/health`,
+with FreeBSD also starting the rc service and building a **native `.pkg`**
+(`packaging/bsd/mkpkg-freebsd.sh`, uploaded as a CI artifact). **FreeBSD and
+NetBSD are the gating targets** (both pass — NetBSD on the stable 10.0 image);
+**OpenBSD is best-effort** and non-blocking (its from-source build needs Rust,
+which the CI image doesn't reliably ship). The full CLI
+(`serve`/`pair`/`diag`/`approve`/…) and every API feature work exactly as on
+Linux.
+
+**FreeBSD is verified on real hardware** (FreeBSD 15.1): the installer +
+rc.d service run, and `mkpkg-freebsd.sh` builds a **native `.pkg`** that
+clean-installs via `pkg add` and serves — attached to releases and, once
+v3.0.0 is stable, served from a signed `pkg` repo. **NetBSD is verified on
+real hardware too** (NetBSD 10.1): the installer, the `rc.d` service, and the
+health check all pass. It needs a release whose pkgsrc binary repo carries
+`python312` + `rust` — stable **10.x** does; a fresh **11.0-RC** repo may not
+yet. Ports/pkgsrc submissions are welcome — `packaging/bsd/` has the rc
+scripts and installer to build on.

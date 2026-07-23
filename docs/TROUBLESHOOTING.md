@@ -105,6 +105,24 @@ HTTPS URL, not `:8420`. On the LAN, check the bind address (a LAN IP, not
 `0.0.0.0`) and that the firewall allows 8420 from your subnet
 ([INSTALL.md §6](INSTALL.md#6-open-the-firewall-lan-only)).
 
+### "Scan the network" finds nothing (app or web UI)
+
+`GET /api/units/scan` (Breeze Core ≥ 3.0.0) TCP-scans ports 6440–6449 across
+the server's own private `/24`. If it comes up empty:
+
+- **Wrong subnet.** It autodetects the server's primary private network; a
+  multi-homed host or an unusual layout may guess wrong. Pass an explicit
+  CIDR: `GET /api/units/scan?subnet=192.168.1.0/24`.
+- **Behind a reverse proxy / loopback bind.** The scan uses the *server's*
+  own LAN interface (not where uvicorn binds), so it still works behind nginx
+  — but if the box genuinely isn't on the units' L2 network (e.g. a different
+  VLAN), it can't see them. Add by IP instead.
+- **Firewalled units.** Some firmware only answers on `6444`; a host firewall
+  between the server and the units will hide them. The manual *add by IP*
+  path still works (it runs real discovery).
+- **Non-private target refused.** The scanner only scans RFC-1918 ranges and
+  caps the host count — it will 400 on a public or oversized `subnet`.
+
 ### fail2ban locked me out
 
 Add your LAN to `ignoreip`; don't let a client spray 401s (an expired token
@@ -141,7 +159,10 @@ Both forms speak only HTTP (they never touch the server's internals), read
 `config.json` for the key, and share the same device-token cache
 (`~/.config/ac-diag/token`), so pairing once covers both.
 
-**`ac-diag.zsh`** checks, in one run: connectivity (`/api/health`), **server
+**`ac-diag` / `breeze-core diag`** checks, in one run: the **background
+service** (when run on the server host — is `breeze-core` running, and
+enabled to start at boot? detects systemd / OpenRC / runit / procd / Windows
+`sc`), connectivity (`/api/health`), **server
 version + build commit + advertised features** (`/api/version`), the auth
 posture (rejects no-key/wrong-key, and detects whether the control API is
 token-gated), **paired devices** with expiry warnings, **config

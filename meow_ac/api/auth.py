@@ -22,7 +22,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from meow_ac.security import net
+from meow_ac.security import net, signing
 from meow_ac.security.base import Authenticator
 from meow_ac.security.enrollment import APPROVED, EnrollmentService, PENDING
 from meow_ac.security.ratelimit import RateLimiter
@@ -34,6 +34,10 @@ log = logging.getLogger("meow-ac")
 
 class StartRequest(BaseModel):
     label: str = Field(default="", max_length=64)
+    # auth_version 2 clients supply their Ed25519 public key (b64url, 32 raw
+    # bytes) here at the start of enrollment. Omitted / 1 = legacy bearer.
+    auth_version: int = Field(default=1, ge=1, le=2)
+    public_key: str = Field(default="", max_length=128)
 
 
 class PollRequest(BaseModel):
@@ -44,11 +48,17 @@ class ApproveRequest(BaseModel):
     code: str = Field(max_length=32)
 
 
+class UpgradeRequest(BaseModel):
+    # The new Ed25519 public key the already-enrolled device just generated.
+    public_key: str = Field(max_length=128)
+
+
 def build_auth_router(
     token_store: TokenStore,
     enrollment: EnrollmentService,
     settings: Settings,
     api_key_auth: Authenticator,
+    device_auth: Authenticator,
 ) -> APIRouter:
     router = APIRouter(prefix="/api/auth")
 
@@ -79,23 +89,62 @@ def build_auth_router(
     @router.post("/enroll/start", dependencies=[Depends(api_key_auth)])
     async def enroll_start(req: StartRequest, request: Request):
         _limit(start_limit, request)
-        session_id, user_code, expires_in = enrollment.start(req.label)
-        log.info("enrollment started (label=%r) from %s", req.label, _client_key(request))
+        # Enforce the clamp at enrollment, not just at control: when the admin
+        # has raised the floor (AC_MIN_AUTH_VERSION >= 2) we refuse to mint a
+        # new credential below it, rather than minting one that would be
+        # 426'd on its first control call. So a clamped server enrolls no new
+        # v1 devices at all — existing ones are still refused at control time
+        # and must upgrade. (At the default floor of 1, v1 enrollment stays
+        # open for the v1-only web UI and CLIs.)
+        if req.auth_version < settings.min_auth_version:
+            raise HTTPException(
+                426,
+                {
+                    "error": "auth_upgrade_required",
+                    "min_auth_version": settings.min_auth_version,
+                    "detail": (
+                        "This server no longer enrols devices on the legacy "
+                        "auth version — use a client that signs requests "
+                        "(Ed25519)."
+                    ),
+                },
+            )
+        if req.auth_version == 2:
+            if not signing.public_key_is_valid(req.public_key):
+                raise HTTPException(400, "invalid or missing Ed25519 public_key for auth_version 2")
+        session_id, user_code, expires_in = enrollment.start(
+            req.label,
+            auth_version=req.auth_version,
+            public_key=req.public_key or None,
+        )
+        log.info(
+            "enrollment started (label=%r, auth_v=%d) from %s",
+            req.label, req.auth_version, _client_key(request),
+        )
         return {"session_id": session_id, "user_code": user_code, "expires_in": expires_in}
 
     @router.post("/enroll/poll", dependencies=[Depends(api_key_auth)])
     async def enroll_poll(req: PollRequest, request: Request):
         _limit(poll_limit, request)
         status, token, record = enrollment.poll(req.session_id)
-        if status == APPROVED and token and record:
-            log.info("device enrolled: %s (%s)", record.label, record.token_id)
-            return {
+        if status == APPROVED and record:
+            log.info(
+                "device enrolled: %s (%s, auth_v=%d)",
+                record.label, record.token_id, record.auth_version,
+            )
+            resp = {
                 "status": APPROVED,
-                "device_token": token,
                 "token_id": record.token_id,
                 "label": record.label,
+                "auth_version": record.auth_version,
                 "expires_at": record.expires_at,
             }
+            # v1 only: the bearer token is delivered exactly once, here. v2
+            # devices already hold their private key, so there's no secret to
+            # return.
+            if token:
+                resp["device_token"] = token
+            return resp
         if status == PENDING:
             return {"status": PENDING}
         # expired or unknown — tell the client to stop and restart
@@ -111,12 +160,51 @@ def build_auth_router(
         log.info("enrollment approved: %s (%s)", record.label, record.token_id)
         return {"token_id": record.token_id, "label": record.label}
 
+    @router.get("/whoami", dependencies=[Depends(api_key_auth), Depends(device_auth)])
+    async def whoami(request: Request):
+        """Describe the calling device (from its own credential). Not
+        LAN-gated — a device may always ask about itself. Lets a client show
+        'this device' and warn before its token expires."""
+        token_id = getattr(request.state, "device_token_id", None)
+        record = token_store.get(token_id) if token_id else None
+        if record is None:
+            raise HTTPException(401, "no authenticated device")
+        return {
+            "token_id": record.token_id,
+            "label": record.label,
+            "auth_version": record.auth_version,
+            "created_at": record.created_at,
+            "expires_at": record.expires_at,
+            "last_used": record.last_used,
+        }
+
+    @router.post("/upgrade", dependencies=[Depends(api_key_auth), Depends(device_auth)])
+    async def upgrade_device(req: UpgradeRequest, request: Request):
+        """Migrate the *calling* device from bearer (v1) to Ed25519 (v2) in
+        place. Authorized by the device's existing valid credential — no
+        admin re-approval and no LAN gate, because this trusts nobody new: it
+        only re-keys a device that already proved possession of a working
+        credential. The client generates the keypair and sends its public
+        key; the old bearer token stops working immediately afterwards.
+        """
+        _limit(approve_limit, request)
+        token_id = getattr(request.state, "device_token_id", None)
+        if not token_id:
+            raise HTTPException(401, "no authenticated device to upgrade")
+        if not signing.public_key_is_valid(req.public_key):
+            raise HTTPException(400, "invalid Ed25519 public_key")
+        if not token_store.upgrade_to_v2(token_id, req.public_key):
+            raise HTTPException(404, "device not found")
+        log.info("device upgraded to v2 (Ed25519): %s", token_id)
+        return {"token_id": token_id, "auth_version": 2}
+
     @router.get("/devices", dependencies=[Depends(api_key_auth), Depends(require_lan)])
     async def list_devices():
         return [
             {
                 "token_id": d.token_id,
                 "label": d.label,
+                "auth_version": d.auth_version,
                 "created_at": d.created_at,
                 "expires_at": d.expires_at,
                 "last_used": d.last_used,

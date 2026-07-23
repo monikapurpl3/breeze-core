@@ -2,7 +2,8 @@
 style). Pure HTTP; reads config.json only for the API key and the expected
 unit list.
 
-The battery: config sanity → connectivity → server version/build/features →
+The battery: config sanity → background service (running? enabled at boot?) →
+connectivity → server version/build/features →
 auth posture → control-API authorization (self-pairing on the LAN if needed)
 → paired devices w/ expiry warnings → unit-listing parity → config
 secret-sanitisation → batch state → input validation → per-unit
@@ -15,6 +16,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+from . import service
 from .client import (
     Http, forget_token, load_cached_token, load_config, pair_device,
 )
@@ -77,6 +79,39 @@ class Diag:
             r.fail("config has zero units")
             raise SystemExit(1)
         r.ok(f"found {len(self.units)} unit(s) in config")
+
+    def check_service(self, extra_name=None) -> None:
+        """Host-local: is the breeze-core background service running, and is
+        it enabled to start at boot? Only meaningful when diag runs on the
+        server itself — skipped gracefully otherwise."""
+        r = self.r
+        r.section("background service")
+        st = service.detect(extra_name)
+        if st.manager == "none":
+            r.info("no init/service manager recognised on this host — skipping "
+                   "(this check applies when diag runs on the server itself)")
+            return
+        if not st.found:
+            r.info(f"{st.manager} present, but no breeze-core/meow-ac service is "
+                   "installed here — skipping (run diag on the server host to check it)")
+            return
+
+        detail = f" [{st.detail}]" if st.detail else ""
+        if st.running is True:
+            r.ok(f"service '{st.name}' is running ({st.manager}){detail}")
+        elif st.running is False:
+            r.fail(f"service '{st.name}' is installed but NOT running ({st.manager}) — "
+                   f"start it{detail}")
+        else:
+            r.warn(f"couldn't determine whether '{st.name}' is running ({st.manager}){detail}")
+
+        if st.boot is True:
+            r.ok(f"service '{st.name}' is enabled to start at boot")
+        elif st.boot is False:
+            r.warn(f"service '{st.name}' is NOT enabled at boot — it won't come back "
+                   "after a reboot")
+        else:
+            r.info(f"couldn't determine the boot-start setting for '{st.name}' ({st.manager})")
 
     def check_connectivity(self) -> None:
         r = self.r
@@ -443,6 +478,9 @@ def run(args) -> int:
     d = Diag(http, config_path, units, r)
 
     d.check_config(api_key)
+    # Local service check first — if the server is unreachable below, knowing
+    # the service isn't running (or isn't enabled at boot) is the answer.
+    d.check_service(getattr(args, "service_name", None))
     d.check_connectivity()
     d.check_version()
     d.check_auth()

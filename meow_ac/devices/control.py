@@ -4,8 +4,8 @@ and the background scheduler.
 
 Extracted so `api/units.py` (a user pressing a button) and
 `programs/scheduler.py` (a schedule/curve firing) run the *exact same*
-code path: same locking, same enum handling, same `beep = False`, same
-error semantics. The function raises `HTTPException` (400 bad enum, 404
+code path: same locking, same enum handling, same beep policy (client
+opt-in, silent by default), same error semantics. The function raises `HTTPException` (400 bad enum, 404
 unknown unit, 503 unreachable/apply-failed); the API route lets those
 propagate, the scheduler catches them broadly and logs.
 """
@@ -54,7 +54,10 @@ async def apply_to_unit(manager: DeviceManager, unit_id: str, req: ControlReques
         if req.turbo is not None:
             device.turbo = req.turbo
 
-        device.beep = False  # no beeping at 2am
+        # Beep only if the client explicitly asks for it; default silent so a
+        # 2am schedule/curve (or any client that doesn't send `beep`) stays
+        # quiet. The Breeze app drives this from a per-device settings toggle.
+        device.beep = bool(req.beep) if req.beep is not None else False
 
         try:
             await device.apply()

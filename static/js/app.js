@@ -7,7 +7,7 @@ import { apiFetch, clearDeviceToken } from "./api.js";
 import { buildPanel, render, setError, setName } from "./unit-card.js";
 import { enroll } from "./enroll.js";
 import {
-  addUnitDialog, renameDialog, confirmDialog,
+  addUnitDialog, renameDialog, confirmDialog, addSourceDialog, scanDialog,
   apiAddUnit, apiRenameUnit, apiDeleteUnit,
 } from "./manage.js";
 import { tempUnit, toggleTempUnit } from "./display.js";
@@ -175,13 +175,30 @@ async function reloadUnits(){
   if(units !== null) buildGrid(units);
 }
 
-// Add-unit dialog -> POST /api/units (server discovers it), then refresh.
+// Add a unit — scan the network for it, or type its IP. Either way it ends
+// at POST /api/units (the server discovers + writes config), then refresh.
 async function doAddUnit(){
+  const choice = await addSourceDialog();
+  if(!choice) return;
+  if(choice === "scan"){
+    const picked = await scanDialog();
+    if(!picked) return;
+    if(picked === "__manual__") return addByIp();
+    return addResolvedIp(picked, null);
+  }
+  return addByIp();
+}
+
+async function addByIp(){
   const r = await addUnitDialog();
   if(!r || !r.ip) return;
+  return addResolvedIp(r.ip, r.name);
+}
+
+async function addResolvedIp(ip, name){
   const status = document.getElementById("globalStatus");
   status.textContent = "discovering unit…";
-  const res = await apiAddUnit(r.ip, r.name);
+  const res = await apiAddUnit(ip, name);
   if(res.status === 401){ status.textContent = ""; reauth(); return; }
   if(!res.ok){ status.textContent = "add failed — " + await res.text(); return; }
   status.textContent = "";

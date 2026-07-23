@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class UnitConfig(BaseModel):
@@ -50,19 +50,42 @@ class AppConfig(BaseModel):
 
 
 class DeviceRecord(BaseModel):
-    """One enrolled client device / access token.
+    """One enrolled client device.
 
-    Only the SHA-256 hash of the token is ever stored — the token itself
-    is shown to the client exactly once, at enrollment, and never again.
+    The stored credential depends on `auth_version`:
+
+    - **v1 (bearer)** — `token_hash` holds the SHA-256 hash of a random
+      bearer token shown to the client once at enrollment; the token itself
+      is never stored. This is the original scheme; existing records load as
+      v1 because `auth_version` defaults to 1.
+    - **v2 (Ed25519)** — `public_key` holds the device's Ed25519 public key
+      (URL-safe base64 of 32 raw bytes). The server stores *only* the public
+      key; the private key never leaves the device, and there is no secret at
+      rest to leak. Requests are signed (see `security/signing.py`).
+
+    A device is pinned to its version: a v1 record can only be matched by a
+    bearer token, a v2 record only by a valid signature. `token_hash` and
+    `public_key` are therefore mutually exclusive per record.
+
     Times are epoch seconds; `expires_at` None means non-expiring.
     """
 
     token_id: str
     label: str
-    token_hash: str
+    auth_version: int = 1
+    token_hash: Optional[str] = None   # v1 only
+    public_key: Optional[str] = None   # v2 only (Ed25519, b64url raw)
     created_at: float
     expires_at: Optional[float] = None
     last_used: Optional[float] = None
+
+    @model_validator(mode="after")
+    def _check_credential(self) -> "DeviceRecord":
+        if self.auth_version == 1 and not self.token_hash:
+            raise ValueError("v1 device record requires token_hash")
+        if self.auth_version == 2 and not self.public_key:
+            raise ValueError("v2 device record requires public_key")
+        return self
 
 
 class DevicesDoc(BaseModel):

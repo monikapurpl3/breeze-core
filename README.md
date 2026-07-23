@@ -22,7 +22,7 @@ Four decoupled components that share exactly one contract — the `/api/*` endpo
 | **Web UI** | `static/` | Self-contained vanilla-JS control panel, served by the app. Just an API client. |
 | **Diagnostic CLI** | `tools/ac-diag.zsh` | HTTP-only health/latency/security checker. |
 | **Approval CLI** | `tools/ac-approve.zsh` | Admin tool to approve device pairings and manage tokens (LAN-only). |
-| **Breeze (Android)** | [separate repo](https://github.com/monikapurpl3/breeze) | Optional native app — the web UI's controls plus programs, diagnostics, server switching, home-screen widgets. |
+| **Breeze (Android)** | [separate repo](https://github.com/monikapurpl3/breeze) | Optional native app — one-unit-per-screen swipe control with modern sliders/switches, scan-to-add, programs, diagnostics, server switching, home-screen widgets. |
 
 Delete any client and the API and the others keep working. Built on
 [msmart-ng](https://github.com/mill1000/midea-msmart), [FastAPI](https://fastapi.tiangolo.com/) +
@@ -141,10 +141,11 @@ round-trip. The full wire contract lives in [docs/API.md](docs/API.md).
 Served by the app at `/`. Self-contained native ES modules — no build step,
 no external dependencies. It prompts for the API key on first load (stored in
 `localStorage`), runs the pairing flow, then shows a live control card per
-unit. Manage units (add by IP / rename / remove), toggle °C/°F, and pick from
-six **Material You-like colour palettes** (header 🎨, saved per browser); the
-footer shows the server's version + build commit. Strict CSP — all styling in
-`css/styles.css`, all logic in `js/` modules.
+unit. Manage units (**add by scanning the network or by IP** / rename /
+remove), toggle °C/°F, and pick from six **Material You-like colour palettes**
+(header 🎨, saved per browser); the footer shows the server's version + build
+commit. Strict CSP — all styling in `css/styles.css`, all logic in `js/`
+modules.
 
 ![Breeze Core web UI — colour palettes](docs/img/web-ui-palettes.png)
 
@@ -155,7 +156,9 @@ footer shows the server's version + build commit. Strict CSP — all styling in
 ## Security
 
 Breeze Core is **LAN-first**. What the app enforces on its own: two-credential
-access (enrollment key **+** per-device token — an
+access (enrollment key **+** a per-device credential — **Ed25519 request
+signing** by default, with the secret never on the wire, or a legacy bearer
+token — via an
 [RFC 8628-style pairing flow](docs/API.md#authentication-device-pairing)),
 admin actions gated to the LAN, in-app rate limiting, strict security headers,
 interactive docs disabled by default, and server-side input bounds. Before

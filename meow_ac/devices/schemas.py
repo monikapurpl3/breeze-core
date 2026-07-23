@@ -42,6 +42,10 @@ class ControlRequest(BaseModel):
     swing_mode: Optional[str] = None
     eco: Optional[bool] = None
     turbo: Optional[bool] = None
+    # Whether the unit chirps when it accepts the command. Optional; when
+    # absent the apply path defaults to silent (see devices/control.py), so
+    # older clients that never send `beep` keep the quiet behaviour.
+    beep: Optional[bool] = None
 
     @field_validator("target_temperature")
     @classmethod
@@ -56,6 +60,49 @@ class ControlRequest(BaseModel):
         if v is not None and v not in ALLOWED_FAN_SPEEDS:
             raise ValueError(f"fan_speed must be one of {sorted(ALLOWED_FAN_SPEEDS)}")
         return v
+
+
+def serialize_capabilities(unit: UnitConfig, device) -> dict:
+    """What this unit actually supports, from msmart's get_capabilities()
+    (already fetched when the DeviceManager first connects). Lets clients hide
+    controls the hardware doesn't have — e.g. a unit with no horizontal flap
+    shouldn't offer the left/right swing option.
+
+    Every attribute is read defensively: msmart-ng's capability surface varies
+    by version, so a missing attribute becomes a null/false rather than a 500.
+    """
+    def _names(attr):
+        v = getattr(device, attr, None)
+        if not v:
+            return None
+        return [getattr(m, "name", str(m)) for m in v]
+
+    def _any(*attrs) -> bool:
+        return any(bool(getattr(device, a, False)) for a in attrs)
+
+    swings = _names("supported_swing_modes")
+    swing_set = set(swings) if swings else None
+
+    return {
+        "id": unit.unit_id,
+        "operational_modes": _names("supported_operation_modes"),
+        "swing_modes": swings,
+        # Which physical flaps exist — derived from the supported swing modes.
+        # None = unknown (older firmware/msmart didn't report it → show all).
+        "supports_vertical_swing":
+            (("VERTICAL" in swing_set) or ("BOTH" in swing_set)) if swing_set else None,
+        "supports_horizontal_swing":
+            (("HORIZONTAL" in swing_set) or ("BOTH" in swing_set)) if swing_set else None,
+        "fan_speeds": _names("supported_fan_speeds"),
+        "supports_custom_fan_speed": _any("supports_custom_fan_speed"),
+        "min_target_temperature": getattr(device, "min_target_temperature", 16.0),
+        "max_target_temperature": getattr(device, "max_target_temperature", 30.0),
+        "supports_eco": _any("supports_eco", "supports_eco_mode"),
+        "supports_turbo": _any("supports_turbo", "supports_turbo_mode"),
+        "supports_display_control": _any("supports_display_control"),
+        "supports_freeze_protection": _any("supports_freeze_protection", "supports_freeze_protection_mode"),
+        "supports_humidity": _any("supports_humidity"),
+    }
 
 
 def serialize(unit: UnitConfig, device) -> dict:

@@ -1,0 +1,121 @@
+name: BSD
+
+# Verifies the BSD source install on real FreeBSD / OpenBSD / NetBSD VMs
+# (vmactions) — the Linux bundles can't run on a BSD kernel, so BSD installs
+# from source into a venv via packaging/bsd/install.sh. Each job: install →
+# `breeze-core version` → serve → GET /api/health. FreeBSD also exercises the
+# rc.d service and builds a native .pkg (uploaded as an artifact).
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      # Scoped to the BSD packaging itself until the recipe is green (being
+      # finalised on a real FreeBSD/NetBSD VM) — so it doesn't re-fail on
+      # unrelated server commits. Re-broaden once it passes.
+      - "packaging/bsd/**"
+      - ".github/workflows/bsd.yml"
+
+jobs:
+  freebsd:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+      - name: FreeBSD — install, service, native .pkg
+        uses: vmactions/freebsd-vm@v1
+        with:
+          release: "14.2"
+          usesh: true
+          # python3.12 ships pip via venv/ensurepip (no py3xx-pip package on
+          # FreeBSD); rust builds pydantic-core. Verified on real FreeBSD 15.1.
+          prepare: pkg install -y python312 rust
+          run: |
+            set -e
+            sh packaging/bsd/install.sh
+            breeze-core version
+            printf '{"api_key":"k","units":[]}' > /usr/local/etc/breeze-core/config.json
+            chown breeze /usr/local/etc/breeze-core/config.json
+            sysrc breeze_core_enable=YES
+            service breeze_core start
+            sleep 6
+            /usr/local/breeze-core/venv/bin/python - <<'PY'
+            import sys, urllib.request
+            b = urllib.request.urlopen("http://127.0.0.1:8420/api/health", timeout=8).read()
+            print("health:", b)
+            sys.exit(0 if b'"ok"' in b else 1)
+            PY
+            service breeze_core stop || true
+            sh packaging/bsd/mkpkg-freebsd.sh "$(pwd)" || echo "::warning:: pkg create failed (non-fatal)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: freebsd-pkg
+          path: "*.pkg"
+          if-no-files-found: warn
+
+  # OpenBSD is best-effort, NOT a committed target (the committed BSD targets
+  # are FreeBSD + NetBSD, both gating above). Its source install needs Rust to
+  # build pydantic-core, and the 7.6 vmactions image doesn't reliably carry a
+  # `rust` binary package — so this job may fail without failing the workflow.
+  # The rc.openbsd script + install.sh OpenBSD path still ship for packagers.
+  openbsd:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v5
+      - name: OpenBSD — install + serve + health
+        uses: vmactions/openbsd-vm@v1
+        with:
+          release: "7.6"
+          prepare: pkg_add -I rust python%3.12 || pkg_add -I rust python%3.11
+          run: |
+            set -e
+            ln -sf /usr/local/bin/python3.11 /usr/local/bin/python3 || true
+            sh packaging/bsd/install.sh
+            breeze-core version
+            /usr/local/breeze-core/venv/bin/python -m meow_ac.cli serve --host 127.0.0.1 --port 8420 >/tmp/s.log 2>&1 &
+            sleep 8
+            /usr/local/breeze-core/venv/bin/python - <<'PY'
+            import sys, urllib.request
+            b = urllib.request.urlopen("http://127.0.0.1:8420/api/health", timeout=8).read()
+            print("health:", b)
+            sys.exit(0 if b'"ok"' in b else 1)
+            PY
+
+  netbsd:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+      - name: NetBSD — install, rc.d service, health
+        uses: vmactions/netbsd-vm@v1
+        with:
+          release: "10.0"
+          # NetBSD 10.x (stable) has python312 + rust as binary packages —
+          # unlike a fresh 11.0_RC whose repo is still being built out.
+          # Verified live on real NetBSD 10.1 (192.168.1.94).
+          prepare: |
+            (command -v pkgin >/dev/null 2>&1 && pkgin -y install python312 rust) || \
+            pkg_add python312 rust
+          # Exercise the rc.d service (not just `serve`) — an earlier bug where
+          # rc.netbsd wrote its pidfile/log as the unprivileged user (EACCES on
+          # /var/run, /var/log) slipped through precisely because CI only ran
+          # `serve` directly. The service path is what users actually use.
+          run: |
+            set -e
+            sh packaging/bsd/install.sh
+            breeze-core version
+            printf '{"api_key":"k","units":[]}' > /usr/pkg/etc/breeze-core/config.json
+            chown breeze /usr/pkg/etc/breeze-core/config.json
+            echo breeze_core=YES >> /etc/rc.conf
+            service breeze_core start
+            sleep 7
+            service breeze_core status
+            /usr/pkg/breeze-core/venv/bin/python - <<'PY'
+            import sys, urllib.request
+            b = urllib.request.urlopen("http://127.0.0.1:8420/api/health", timeout=8).read()
+            print("health:", b)
+            sys.exit(0 if b'"ok"' in b else 1)
+            PY
+            service breeze_core stop || true
