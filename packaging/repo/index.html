@@ -6,33 +6,57 @@
 <title>Breeze Core package repository</title>
 <style>
   body{margin:0;background:#0a0c0f;color:#e4e7eb;font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding:40px 20px}
-  main{max-width:860px;margin:0 auto}
-  h1{font-size:24px;letter-spacing:-.02em}
-  h2{font-size:17px;margin-top:34px;border-bottom:1px solid #262b33;padding-bottom:6px}
+  main{max-width:880px;margin:0 auto}
+  h1{font-size:24px;letter-spacing:-.02em;margin-bottom:4px}
+  h2{font-size:18px;margin-top:38px;border-bottom:1px solid #262b33;padding-bottom:6px}
+  h2 .who{display:block;font-size:12.5px;font-weight:400;color:#8b93a0;margin-top:3px}
   code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px}
   pre{background:#14171c;border:1px solid #262b33;border-radius:10px;padding:14px;overflow-x:auto}
   a{color:#4fd1c5;text-decoration:none} a:hover{text-decoration:underline}
   .muted{color:#8b93a0;font-size:13px}
+  .note{background:#12171e;border-left:3px solid #4fd1c5;border-radius:0 8px 8px 0;padding:8px 14px;margin:10px 0;font-size:13px;color:#b7c0cc}
+  .note b{color:#e4e7eb}
+  .toc{background:#12151a;border:1px solid #262b33;border-radius:10px;padding:12px 16px;margin:22px 0;font-size:13.5px}
+  .toc a{margin-right:14px;white-space:nowrap;display:inline-block}
+  .step{color:#8b93a0}
 </style>
 </head>
 <body>
 <main>
-  <h1>Breeze Core package repository</h1>
-  <p>Signed packages for <a href="https://github.com/monikapurpl3/breeze-core">Breeze Core</a> —
-  self-hosted, LAN-first control for Midea air conditioners. Current version: <strong>@VERSION@</strong>.
-  Add the repo once; updates then arrive through your normal package manager.</p>
-  <p class="muted">Everything here is built and signed offline, then published as static files —
-  this server holds no signing keys. Verify against the keys below. amd64/x86_64 and arm64/aarch64.</p>
+  <h1>Breeze Core packages</h1>
+  <p class="muted">Signed packages for <a href="https://github.com/monikapurpl3/breeze-core">Breeze Core</a>
+  — self-hosted, LAN-first control for Midea air conditioners. Current version <strong>@VERSION@</strong>.</p>
 
-  <h2>Debian · Ubuntu · Mint · Pop!_OS · Raspberry Pi OS · Devuan</h2>
+  <p><b>How this works:</b> add the repository once with the snippet for your system below, then
+  <b>install and update through your normal package manager</b> — <code>apt upgrade</code>,
+  <code>dnf upgrade</code>, <code>zypper up</code>, <code>pacman -Syu</code>, <code>apk upgrade</code>.
+  Everything is built and <b>signed offline</b>; this server only serves static files and holds no
+  keys, so verify against the published keys. amd64/x86_64 and arm64/aarch64 (BSD: amd64 only).</p>
+
+  <div class="toc">
+    <b>Jump to your system:</b><br>
+    <a href="#debian">Debian / Ubuntu</a>
+    <a href="#rhel">Fedora / RHEL</a>
+    <a href="#suse">openSUSE / SLE</a>
+    <a href="#arch">Arch</a>
+    <a href="#alpine">Alpine</a>
+    <a href="#openwrt">OpenWrt</a>
+    <a href="#freebsd">FreeBSD</a>
+    <a href="#netbsd">NetBSD</a>
+    <a href="#after">After install</a>
+  </div>
+
+  <h2 id="debian">Debian family <span class="who">Debian · Ubuntu · Mint · Pop!_OS · Raspberry Pi OS · Devuan — <code>apt</code></span></h2>
   <pre>curl -fsSL https://bolero.salataputarica.hr.eu.org/breeze-core.asc \
   | sudo gpg --dearmor -o /usr/share/keyrings/breeze-core.gpg
 echo "deb [signed-by=/usr/share/keyrings/breeze-core.gpg] https://bolero.salataputarica.hr.eu.org/deb stable main" \
   | sudo tee /etc/apt/sources.list.d/breeze-core.list
 sudo apt update && sudo apt install breeze-core</pre>
 
-  <h2>Fedora · RHEL · AlmaLinux · Rocky · openSUSE · SLE</h2>
-  <pre>sudo tee /etc/yum.repos.d/breeze-core.repo &lt;&lt;'EOF'
+  <h2 id="rhel">Fedora / RHEL family <span class="who">Fedora · RHEL · AlmaLinux · Rocky · CentOS Stream — <code>dnf</code></span></h2>
+  <p class="muted">Import the signing key first (works the same on every version), then add the repo:</p>
+  <pre>sudo rpm --import https://bolero.salataputarica.hr.eu.org/breeze-core.asc
+sudo tee /etc/yum.repos.d/breeze-core.repo &lt;&lt;'EOF'
 [breeze-core]
 name=Breeze Core
 baseurl=https://bolero.salataputarica.hr.eu.org/rpm/$basearch/
@@ -41,9 +65,28 @@ gpgcheck=1
 repo_gpgcheck=1
 gpgkey=https://bolero.salataputarica.hr.eu.org/breeze-core.asc
 EOF
-sudo dnf install breeze-core            # openSUSE: sudo zypper ref &amp;&amp; sudo zypper in breeze-core</pre>
+sudo dnf install breeze-core</pre>
+  <div class="note">
+    <b>dnf 4 vs dnf 5.</b> The <code>.repo</code> file above works on both.
+    On <b>dnf 4</b> (RHEL 8/9, Fedora ≤ 40) the key is imported interactively on the first install —
+    the <code>rpm --import</code> step just does it up front so there's no prompt.
+    On <b>dnf 5</b> (Fedora 41+, RHEL 10) that pre-import is <b>required</b>: dnf 5 no longer pulls the
+    key from <code>gpgkey=</code> on its own. If you prefer <code>dnf config-manager</code>, note the verb
+    changed too — dnf 5 wants <code>dnf config-manager addrepo --from-repofile=&lt;url&gt;</code>
+    (dnf 4 used <code>--add-repo</code>).
+  </div>
 
-  <h2>Arch · Manjaro · Artix</h2>
+  <h2 id="suse">openSUSE / SLE <span class="who">Leap · Tumbleweed · SLES/SLED — <code>zypper</code></span></h2>
+  <p class="muted">Same rpms, but zypper adds and refreshes the repo its own way:</p>
+  <pre>sudo rpm --import https://bolero.salataputarica.hr.eu.org/breeze-core.asc
+sudo zypper addrepo --refresh --gpgcheck \
+  https://bolero.salataputarica.hr.eu.org/rpm/x86_64/ breeze-core
+sudo zypper --gpg-auto-import-keys refresh
+sudo zypper install breeze-core</pre>
+  <p class="muted">On aarch64 use <code>rpm/aarch64/</code> in the URL. <code>--gpg-auto-import-keys</code>
+  accepts the repo signature non-interactively.</p>
+
+  <h2 id="arch">Arch family <span class="who">Arch · Manjaro · Artix — <code>pacman</code></span></h2>
   <pre>curl -fsSL https://bolero.salataputarica.hr.eu.org/breeze-core.asc | sudo pacman-key --add -
 sudo pacman-key --lsign-key "$(gpg --show-keys --with-colons \
   <(curl -fsSL https://bolero.salataputarica.hr.eu.org/breeze-core.asc) | awk -F: '/^fpr/{print $10; exit}')"
@@ -55,13 +98,13 @@ Server = https://bolero.salataputarica.hr.eu.org/arch/$arch
 EOF
 sudo pacman -Sy breeze-core</pre>
 
-  <h2>Alpine</h2>
+  <h2 id="alpine">Alpine <span class="who"><code>apk</code></span></h2>
   <pre>sudo curl -fsSL -o /etc/apk/keys/breeze-core@bolero.rsa.pub \
   https://bolero.salataputarica.hr.eu.org/alpine/breeze-core@bolero.rsa.pub
 echo "https://bolero.salataputarica.hr.eu.org/alpine" | sudo tee -a /etc/apk/repositories
 sudo apk update && sudo apk add breeze-core</pre>
 
-  <h2>OpenWrt <span class="muted">(x86_64 / aarch64 devices with ~65&nbsp;MB free — extroot counts)</span></h2>
+  <h2 id="openwrt">OpenWrt <span class="who">x86_64 / aarch64 routers with ~65&nbsp;MB free (extroot counts) — <code>opkg</code></span></h2>
   <pre>wget -q -O /tmp/breeze.pub https://bolero.salataputarica.hr.eu.org/openwrt/breeze-core-usign.pub
 cp /tmp/breeze.pub "/etc/opkg/keys/$(usign -F -p /tmp/breeze.pub)"
 echo "src/gz breeze_core https://bolero.salataputarica.hr.eu.org/openwrt/$(. /etc/openwrt_release; echo $DISTRIB_ARCH)" \
@@ -69,15 +112,48 @@ echo "src/gz breeze_core https://bolero.salataputarica.hr.eu.org/openwrt/$(. /et
 opkg update && opkg install breeze-core
 # then: breeze-core pair && /etc/init.d/breeze-core start   (procd service)</pre>
 
-  <h2>After installing (any distro)</h2>
-  <pre>sudo breeze-core pair                        # find your ACs, write the config
-sudoedit /etc/breeze-core/breeze-core.env    # BREEZE_HOST=&lt;this machine's LAN IP&gt;
-sudo systemctl enable --now breeze-core      # OpenRC: rc-update add breeze-core default</pre>
+  <h2 id="freebsd">FreeBSD <span class="who">amd64 — a real, RSA-signed <code>pkg</code> repo</span></h2>
+  <pre>sudo mkdir -p /usr/local/etc/pkg/keys /usr/local/etc/pkg/repos
+sudo fetch -o /usr/local/etc/pkg/keys/breeze-core.pub \
+  https://bolero.salataputarica.hr.eu.org/freebsd/breeze-freebsd-repo.rsa.pub
+sudo tee /usr/local/etc/pkg/repos/breeze-core.conf &lt;&lt;'EOF'
+breeze-core: {
+  url: "https://bolero.salataputarica.hr.eu.org/freebsd",
+  signature_type: "pubkey",
+  pubkey: "/usr/local/etc/pkg/keys/breeze-core.pub",
+  enabled: yes
+}
+EOF
+sudo pkg update &amp;&amp; sudo pkg install breeze-core
+# then: breeze-core pair &amp;&amp; sysrc breeze_core_enable=YES &amp;&amp; service breeze_core start</pre>
 
-  <p class="muted">Keys: <a href="/breeze-core.asc">GPG (apt/dnf/pacman)</a> ·
-  <a href="/alpine/breeze-core@bolero.rsa.pub">RSA (apk)</a>.
-  Void/Gentoo/other → <a href="https://github.com/monikapurpl3/breeze-core/blob/main/docs/PACKAGES.md">tarballs on GitHub releases</a>.
-  Browse: <a href="/deb/">deb</a> · <a href="/rpm/">rpm</a> · <a href="/arch/">arch</a> · <a href="/alpine/">alpine</a>.</p>
+  <h2 id="netbsd">NetBSD <span class="who">amd64/x86_64 — a <code>pkgin</code> binary repo (needs python312 from pkgsrc)</span></h2>
+  <pre>echo "https://bolero.salataputarica.hr.eu.org/netbsd/All" \
+  | su root -c 'tee -a /usr/pkg/etc/pkgin/repositories.conf'
+su root -c 'pkgin update &amp;&amp; pkgin -y install breeze-core'
+# then: breeze-core pair &amp;&amp; echo breeze_core=YES &gt;&gt; /etc/rc.conf &amp;&amp; service breeze_core start</pre>
+  <p class="muted">BSD builds from a private virtualenv (the Linux self-contained bundles can't run on a
+  BSD kernel). Verified on real FreeBSD&nbsp;15 and NetBSD&nbsp;10. OpenBSD: build from source — see
+  <a href="https://github.com/monikapurpl3/breeze-core/blob/main/docs/PACKAGES.md">PACKAGES.md</a>.</p>
+
+  <h2 id="after">After installing <span class="who">any system — three steps to a running server</span></h2>
+  <pre><span class="step"># 1.</span> sudo breeze-core pair                        <span class="step"># find your ACs, write the config</span>
+<span class="step"># 2.</span> sudoedit /etc/breeze-core/breeze-core.env    <span class="step"># set BREEZE_HOST=&lt;this machine's LAN IP&gt;</span>
+<span class="step"># 3.</span> sudo systemctl enable --now breeze-core      <span class="step"># OpenRC: rc-update add breeze-core default; BSD: see above</span></pre>
+  <p class="muted">Then open <code>http://&lt;BREEZE_HOST&gt;:8420</code>, enter the API key from
+  <code>/etc/breeze-core/config.json</code>, and pair. The service runs as an unprivileged
+  <code>breeze</code> user. Uninstalling keeps your config + device tokens.</p>
+
+  <p class="muted" style="margin-top:28px">
+  <b>Keys:</b> <a href="/breeze-core.asc">GPG (apt/dnf/zypper/pacman)</a> ·
+  <a href="/alpine/breeze-core@bolero.rsa.pub">RSA (apk)</a> ·
+  <a href="/freebsd/breeze-freebsd-repo.rsa.pub">RSA (FreeBSD pkg)</a> ·
+  <a href="/openwrt/breeze-core-usign.pub">usign (OpenWrt)</a>.<br>
+  <b>Other distros</b> (Void, Gentoo, Slackware, …) → tarballs + source recipes on
+  <a href="https://github.com/monikapurpl3/breeze-core/blob/main/docs/PACKAGES.md">GitHub / PACKAGES.md</a>.<br>
+  <b>Browse:</b> <a href="/deb/">deb</a> · <a href="/rpm/">rpm</a> · <a href="/arch/">arch</a> ·
+  <a href="/alpine/">alpine</a> · <a href="/openwrt/">openwrt</a> · <a href="/freebsd/">freebsd</a> ·
+  <a href="/netbsd/">netbsd</a>.</p>
 </main>
 </body>
 </html>
