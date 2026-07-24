@@ -144,18 +144,44 @@ box next to the router.
 
 ## FreeBSD, OpenBSD, NetBSD
 
-The Linux self-contained bundles are Linux ELF binaries — they can't run on a
-BSD kernel (and a container can't help, since it shares the host's Linux
-kernel). So BSD installs **from source** into a private virtualenv: the same
+**FreeBSD and NetBSD have binary repos on bolero** (hardware-verified on
+FreeBSD 15 / NetBSD 10) — install with the native tool:
+
+```sh
+# FreeBSD (amd64) — RSA-signed pkg repo:
+sudo mkdir -p /usr/local/etc/pkg/keys /usr/local/etc/pkg/repos
+sudo fetch -o /usr/local/etc/pkg/keys/breeze-core.pub \
+  https://bolero.salataputarica.hr.eu.org/freebsd/breeze-freebsd-repo.rsa.pub
+sudo tee /usr/local/etc/pkg/repos/breeze-core.conf <<'EOF'
+breeze-core: {
+  url: "https://bolero.salataputarica.hr.eu.org/freebsd",
+  signature_type: "pubkey",
+  pubkey: "/usr/local/etc/pkg/keys/breeze-core.pub",
+  enabled: yes
+}
+EOF
+sudo pkg update && sudo pkg install breeze-core
+
+# NetBSD (amd64/x86_64) — pkgin repo (needs python312 from pkgsrc):
+echo "https://bolero.salataputarica.hr.eu.org/netbsd/All" \
+  | su root -c 'tee -a /usr/pkg/etc/pkgin/repositories.conf'
+su root -c 'pkgin update && pkgin -y install breeze-core'
+```
+
+Then `breeze-core pair`, set `BREEZE_HOST` in the env file, and enable the
+rc.d service (see below). **OpenBSD — or any BSD, from source:** the Linux
+self-contained bundles are Linux ELF binaries — they can't run on a
+BSD kernel (a container can't help, it shares the host's Linux
+kernel). So BSD also installs **from source** into a private virtualenv: the same
 `meow_ac.app:app`, built on the host. One command from a checkout (or the
 source tarball) does the lot — service user, venv + deps, a `breeze-core`
 wrapper, the rc.d service, and the env file:
 
 ```sh
-# FreeBSD:  pkg install -y python311 py311-pip rust
-# OpenBSD:  pkg_add python%3.11 rust
-# NetBSD:   pkgin -y install python311 py311-pip rust
-#   (rust builds pydantic-core; a C compiler ships in base)
+# FreeBSD:  pkg install -y python312 rust
+# OpenBSD:  pkg_add python%3.12 rust
+# NetBSD:   pkgin -y install python312 rust
+#   (rust builds pydantic-core; pip comes via venv/ensurepip; a C compiler ships in base)
 
 doas sh packaging/bsd/install.sh     # OpenBSD (or `sudo`/`su` on FreeBSD/NetBSD)
 ```
