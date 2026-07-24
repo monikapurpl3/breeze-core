@@ -26,6 +26,27 @@ else
     START='start the breeze-core service with your init system'
 fi
 
+# Upgrade vs fresh install: rpm %post passes $1=1 (install), >=2 (upgrade);
+# dpkg postinst passes "configure" with the OLD version in $2 on upgrade
+# (empty on first install). On an UPGRADE, refresh a running service so the
+# new binary takes effect, and skip the quickstart banner.
+_upgrade=0
+if [ "${1:-}" = "configure" ]; then
+    [ -n "${2:-}" ] && _upgrade=1
+elif [ "${1:-0}" -ge 2 ] 2>/dev/null; then
+    _upgrade=1
+fi
+
+if [ "$_upgrade" -eq 1 ]; then
+    if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then
+        systemctl try-restart breeze-core >/dev/null 2>&1 || true   # restart only if running
+    elif command -v rc-service >/dev/null 2>&1; then
+        rc-service breeze-core status >/dev/null 2>&1 && \
+            rc-service breeze-core restart >/dev/null 2>&1 || true
+    fi
+    exit 0
+fi
+
 cat <<EOF
 
   Breeze Core installed.
