@@ -27,7 +27,7 @@ from __future__ import annotations
 
 from fastapi import HTTPException, Request
 
-from meow_ac.security import signing
+from meow_ac.security import authlog, signing
 from meow_ac.security.signing import NonceCache
 from meow_ac.security.token_store import TokenStore
 
@@ -83,8 +83,10 @@ class DeviceTokenAuthenticator:
         token = _bearer(request)
         record = self._tokens.find_by_secret(token) if token else None
         if record is None:
-            raise HTTPException(
+            raise authlog.auth_failure(
+                request,
                 401,
+                authlog.NO_CREDENTIAL if not token else authlog.UNKNOWN_KEY,
                 "missing, invalid, or expired device token — enroll this "
                 "device to get one",
             )
@@ -93,6 +95,7 @@ class DeviceTokenAuthenticator:
         self._tokens.touch(record.token_id)
         request.state.auth_version = record.auth_version
         request.state.device_token_id = record.token_id
+        authlog.auth_ok(request, key_id=record.token_id, auth_version=record.auth_version)
 
     # -- v2: Ed25519 request signature --------------------------------
 
@@ -102,11 +105,24 @@ class DeviceTokenAuthenticator:
         nonce = request.headers.get("x-breeze-nonce", "")
         signature = request.headers.get("x-breeze-signature", "")
         if not (key_id and timestamp and nonce and signature):
-            raise HTTPException(401, "incomplete request signature")
+            raise authlog.auth_failure(
+                request, 401, authlog.INCOMPLETE_SIGNATURE,
+                "incomplete request signature",
+                key_id=key_id or None,
+            )
 
         record = self._tokens.find_by_key_id(key_id)
         if record is None or not record.public_key:
-            raise HTTPException(401, "unknown, expired, or non-v2 device key")
+            # Distinguish "we've never heard of this key" from "we had it and
+            # it lapsed" — the client's reaction is the same (re-enroll), but
+            # the admin's isn't (revoked vs. expired vs. wrong server).
+            known = self._tokens.get(key_id)
+            reason = authlog.EXPIRED if known is not None else authlog.UNKNOWN_KEY
+            raise authlog.auth_failure(
+                request, 401, reason,
+                "unknown, expired, or non-v2 device key",
+                key_id=key_id,
+            )
 
         # (No clamp branch here: v2 already meets any min we'd set. Kept for
         # symmetry if a future v3 raises the floor above 2.)
@@ -115,7 +131,19 @@ class DeviceTokenAuthenticator:
 
         now = signing.now_seconds()
         if not self._nonces.timestamp_in_window(timestamp, now):
-            raise HTTPException(401, "request timestamp outside the allowed window")
+            # RETRYABLE, and the single most likely cause of a mystery lockout:
+            # a phone whose clock drifted (no network while asleep → no time
+            # sync). Hand back our clock so the client can measure the offset
+            # and re-sign, instead of concluding its credential is dead.
+            raise authlog.auth_failure(
+                request, 401, authlog.CLOCK_SKEW,
+                "request timestamp outside the allowed window — check the "
+                "device clock",
+                key_id=key_id,
+                server_time=round(now, 3),
+                client_time=timestamp,
+                max_skew_seconds=self._nonces.skew_seconds,
+            )
 
         # Body is cached by Starlette, so reading it here doesn't starve the
         # downstream route handler.
@@ -125,13 +153,24 @@ class DeviceTokenAuthenticator:
             path = f"{path}?{request.url.query}"
         canonical = signing.build_canonical(request.method, path, timestamp, nonce, body)
         if not signing.verify_signature(record.public_key, canonical, signature):
-            raise HTTPException(401, "bad request signature")
+            raise authlog.auth_failure(
+                request, 401, authlog.BAD_SIGNATURE,
+                "bad request signature",
+                key_id=key_id,
+            )
 
         # Verify signature BEFORE spending the nonce, so an attacker can't
         # burn a victim's future nonce with a forged request.
         if not self._nonces.check_and_store(nonce, now):
-            raise HTTPException(401, "replayed request (nonce already used)")
+            # RETRYABLE: a client that retried a request verbatim (flaky
+            # mobile link) re-sends the same nonce. Its credential is fine.
+            raise authlog.auth_failure(
+                request, 401, authlog.REPLAY,
+                "replayed request (nonce already used) — retry with a fresh nonce",
+                key_id=key_id,
+            )
 
         self._tokens.touch(record.token_id)
         request.state.auth_version = record.auth_version
         request.state.device_token_id = record.token_id
+        authlog.auth_ok(request, key_id=record.token_id, auth_version=record.auth_version)

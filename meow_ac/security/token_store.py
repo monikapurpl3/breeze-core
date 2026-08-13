@@ -89,10 +89,19 @@ class TokenStore:
 
     def revoke(self, token_id: str) -> bool:
         before = len(self.doc.devices)
+        gone = [d for d in self.doc.devices if d.token_id == token_id]
         self.doc.devices = [d for d in self.doc.devices if d.token_id != token_id]
         removed = len(self.doc.devices) != before
         if removed:
             self.save()
+            # A revoked device 401s forever after; make that traceable rather
+            # than a mystery lockout.
+            log.info(
+                "device revoked: token_id=%s label=%r (%d device(s) remain)",
+                token_id,
+                gone[0].label if gone else "?",
+                len(self.doc.devices),
+            )
         return removed
 
     # -- lookup --------------------------------------------------------

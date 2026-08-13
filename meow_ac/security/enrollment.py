@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from typing import Dict, Optional, Tuple
 
 from meow_ac.config.models import DeviceRecord
-from meow_ac.security import crypto
+from meow_ac.security import authlog, crypto
 from meow_ac.security.token_store import TokenStore
 
 # Enrollment outcomes returned by poll().
@@ -131,6 +131,16 @@ class EnrollmentService:
                 expires_at=expires_at,
             )
         self._tokens.add(record)
+
+        # Lifecycle trail: pairing and revocation are exactly the events you
+        # need timestamped when a user reports being logged out.
+        authlog.event(
+            "device enrolled: label=%r token_id=%s auth_version=%d expires=%s "
+            "(%d device(s) enrolled)",
+            record.label, record.token_id, record.auth_version,
+            "never" if expires_at is None else int(expires_at),
+            len(self._tokens.list()),
+        )
 
         matched.approved = True
         matched.token = token

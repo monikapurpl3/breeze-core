@@ -82,6 +82,13 @@ class Settings:
     # Lifetime of a minted device token; 0 = never expires.
     token_ttl_days: int = 90
 
+    # How far a v2 request timestamp may drift from server time, each way
+    # (seconds) — also how long a nonce is remembered for replay rejection.
+    # Phones that sleep without a network don't sync their clocks, so a
+    # too-tight window rejects real users; raise it (e.g. 300) if your devices
+    # have sloppy clocks. 60 is the protocol default.
+    auth_skew_seconds: int = 60
+
     # Per-unit in-memory history ring size (samples kept for /history and the
     # last-known values in /metrics). ~720 ≈ an hour at the app's 5 s poll.
     history_size: int = 720
@@ -123,6 +130,7 @@ class Settings:
             enrollment_lan_only=_env_bool("AC_ENROLL_LAN_ONLY", True),
             code_ttl_seconds=_env_int("AC_CODE_TTL", 60),
             token_ttl_days=_env_int("AC_TOKEN_TTL_DAYS", 90),
+            auth_skew_seconds=_env_int("AC_AUTH_SKEW_SECONDS", 60),
             min_auth_version=_env_int("AC_MIN_AUTH_VERSION", 1),
             history_size=_env_int("AC_HISTORY_SIZE", 720),
             stream_tick_seconds=_env_int("AC_STREAM_TICK", 5),

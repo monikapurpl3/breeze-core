@@ -121,6 +121,12 @@ class NonceCache:
         self._skew = skew_seconds
         self._seen: Dict[str, float] = {}
 
+    @property
+    def skew_seconds(self) -> int:
+        """The accepted drift each way — reported to clients in a clock_skew
+        rejection so they can tell how far out they are."""
+        return self._skew
+
     def check_and_store(self, nonce: str, now: float) -> bool:
         """Return True if `nonce` is fresh (and record it); False if replayed."""
         self._sweep(now)

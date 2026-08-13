@@ -14,9 +14,10 @@ from __future__ import annotations
 
 import secrets
 
-from fastapi import HTTPException, Request
+from fastapi import Request
 
 from meow_ac.config.store import ConfigStore
+from meow_ac.security import authlog
 
 
 class ApiKeyAuthenticator:
@@ -32,4 +33,9 @@ class ApiKeyAuthenticator:
         presented = request.headers.get("x-api-key", "")
         # constant-time compare so the key can't be brute-forced via timing
         if not secrets.compare_digest(presented, config.api_key or ""):
-            raise HTTPException(401, "missing or invalid X-API-Key header")
+            raise authlog.auth_failure(
+                request,
+                401,
+                authlog.NO_CREDENTIAL if not presented else authlog.BAD_API_KEY,
+                "missing or invalid X-API-Key header",
+            )

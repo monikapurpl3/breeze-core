@@ -93,7 +93,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     # (v1 bearer token / v2 Ed25519 request signature) and enforces the
     # min-auth-version clamp. Composing the two factors is a list — a further
     # factor would just be appended here (see security/base.py).
-    nonce_cache = NonceCache()
+    nonce_cache = NonceCache(settings.auth_skew_seconds)
     api_key_auth = ApiKeyAuthenticator(store)
     device_auth = DeviceTokenAuthenticator(
         token_store, nonce_cache, min_auth_version=settings.min_auth_version
