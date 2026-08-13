@@ -1,26 +1,45 @@
-# Breeze Core fail2ban jails — deploy to /etc/fail2ban/jail.d/breeze-core.local.
-# Set logpath to your Breeze vhost's access log and ignoreip to your LAN.
-# See HARDENING.md §3.
+# Breeze Core jails.
+#
+# These cut noise; they are NOT the security boundary — the API key plus the
+# per-device credential are. Thresholds are therefore generous enough that a
+# real person with a stale credential is never banned, while sustained
+# credential guessing still is.
+#
+# ignoreip: list your own egress/WAN address here as well as the LAN. Every
+# client that reaches the server via NAT hairpin arrives as that single
+# address, so banning it locks out everyone behind it simultaneously.
+
 [breeze-core]
 enabled  = true
 port     = http,https
 filter   = breeze-core
 logpath  = /var/log/nginx/breeze.access.log
-maxretry = 5
+# 20 auth failures in 10 minutes: a phone with a dead credential makes a
+# handful and backs off; a script makes hundreds.
+maxretry = 20
 findtime = 600
-bantime  = 86400
+bantime  = 1h
 bantime.increment = true
-bantime.maxtime   = 5w
-ignoreip = 127.0.0.1/8 ::1 192.168.0.0/16
+bantime.factor    = 2
+# Cap at a day: a weeks-long ban on a possibly-shared address, for a credential
+# that can't realistically be brute-forced, is all downside.
+bantime.maxtime   = 1d
+ignoreip = 127.0.0.1/8 ::1 192.168.0.0/16 10.0.0.0/8 172.16.0.0/12
+# ignoreip = ... <your.wan.ip.here>
 
 [breeze-core-tripwire]
 enabled  = true
 port     = http,https
 filter   = breeze-core-tripwire
 logpath  = /var/log/nginx/breeze.access.log
-maxretry = 1
-findtime = 86400
+# Still the "someone is poking admin endpoints" alarm, but not hair-triggered:
+# maxretry = 1 meant a single accidental 403 (a client that was off-LAN, a
+# mistyped approval) earned a week-long ban. Three hits shows intent.
+maxretry = 3
+findtime = 3600
 bantime  = 604800
 bantime.increment = true
+bantime.factor    = 2
 bantime.maxtime   = 8w
-ignoreip = 127.0.0.1/8 ::1 192.168.0.0/16
+ignoreip = 127.0.0.1/8 ::1 192.168.0.0/16 10.0.0.0/8 172.16.0.0/12
+# ignoreip = ... <your.wan.ip.here>

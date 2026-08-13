@@ -61,7 +61,16 @@ ExecStart=… uvicorn meow_ac.app:app --host 127.0.0.1 --port 8420 --proxy-heade
 
 ## 3. fail2ban
 
-The app logs rejections and the proxy logs 4xx; fail2ban bans IPs that pile them up. Point the jails at your vhost's **dedicated access log** (e.g. give the Breeze vhost its own `access_log`/`CustomLog`). Two jails: a general one, and a **tripwire** — any non-LAN hit on an admin endpoint (the proxy answers 403) is by definition hostile.
+The app logs rejections (with reason codes — see §3.1) and the proxy logs 4xx; fail2ban bans IPs that pile them up. Point the jails at your vhost's **dedicated access log** (e.g. give the Breeze vhost its own `access_log`/`CustomLog`). Two jails: a general one, and a **tripwire** on admin endpoints.
+
+> ### ⚠ Don't ban your own users
+>
+> These jails reduce noise; they are **not** the security boundary — the API key plus the per-device credential are, and neither is brute-forceable in practice. Tune them accordingly. Two mistakes are easy to make and were both made here:
+>
+> - **Matching too many status codes.** A filter that counts `400|404|405|422|429` treats *normal client behaviour* as an attack: the app feature-detects endpoints (`404` on an older server), the server validates input (`422` for an out-of-range setpoint), the in-app diagnostics deliberately probes unknown-unit and no-key paths, and `429` is your own rate limiter. Count **`401`/`403` only**.
+> - **Forgetting that clients share an address.** Everything arriving through NAT — including your own LAN devices reaching the public hostname via router hairpin — presents as **one** IP. Ban it and *everyone* on that connection is locked out at once. Put your WAN address in `ignoreip` alongside the LAN ranges.
+>
+> A too-tight jail is not "more secure": it's an outage generator that hits legitimate users first, since attackers don't care about being banned.
 
 `/etc/fail2ban/filter.d/breeze-core.conf`:
 ```ini
@@ -69,7 +78,7 @@ The app logs rejections and the proxy logs 4xx; fail2ban bans IPs that pile them
 # NOTE: fail2ban strips the [timestamp] but LEAVES the empty '[]' in the
 # line it matches. A failregex containing the date matches NOTHING — a
 # silent failure. Verify any change with: fail2ban-regex <log> <filter>
-failregex = ^<HOST> \S+ \S+ \[\] "[^"]*" (?:400|401|403|404|405|422|429)
+failregex = ^<HOST> \S+ \S+ \[\] "[^"]*" (?:401|403) 
 ignoreregex =
 ```
 `/etc/fail2ban/filter.d/breeze-core-tripwire.conf`:
@@ -78,31 +87,34 @@ ignoreregex =
 failregex = ^<HOST> \S+ \S+ \[\] "(?:GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS) /api/auth/(?:enroll/approve|devices)[^"]*" 403
 ignoreregex =
 ```
-`/etc/fail2ban/jail.d/breeze-core.local` (set `logpath` and `ignoreip` for your LAN):
+`/etc/fail2ban/jail.d/breeze-core.local` (set `logpath`, and put **your LAN ranges *and* WAN address** in `ignoreip`):
 ```ini
 [breeze-core]
 enabled = true
 port    = http,https
 filter  = breeze-core
 logpath = /var/log/nginx/breeze.access.log
-maxretry = 5
+# 20 auth failures in 10 min: a phone with a stale credential makes a handful
+# and backs off; a script guessing keys makes hundreds.
+maxretry = 20
 findtime = 600
-bantime  = 86400
+bantime  = 1h
 bantime.increment = true
-bantime.maxtime   = 5w
-ignoreip = 127.0.0.1/8 ::1 192.168.0.0/16
+bantime.factor    = 2
+bantime.maxtime   = 1d          # not 5w — the address may be shared
+ignoreip = 127.0.0.1/8 ::1 192.168.0.0/16 10.0.0.0/8 172.16.0.0/12 <your.wan.ip>
 
 [breeze-core-tripwire]
 enabled = true
 port    = http,https
 filter  = breeze-core-tripwire
 logpath = /var/log/nginx/breeze.access.log
-maxretry = 1
-findtime = 86400
+maxretry = 3                    # not 1 — one accidental off-LAN 403 isn't an attack
+findtime = 3600
 bantime  = 604800
 bantime.increment = true
 bantime.maxtime   = 8w
-ignoreip = 127.0.0.1/8 ::1 192.168.0.0/16
+ignoreip = 127.0.0.1/8 ::1 192.168.0.0/16 10.0.0.0/8 172.16.0.0/12 <your.wan.ip>
 ```
 ```bash
 sudo systemctl restart fail2ban
@@ -110,7 +122,27 @@ sudo fail2ban-client status breeze-core
 ```
 Example filter/jail files ship in [`deploy/fail2ban/`](deploy/). `ignoreip` exempts your LAN so you can't lock yourself out; outsiders get no grace.
 
-> **Second gotcha:** the web UI/app must not spray 401s or a legitimate remote user with an expired token would ban *themselves*. Breeze's UI pauses polling while re-pairing and while backgrounded — keep that behavior if you fork the client.
+> **Second gotcha:** the web UI/app must not spray 401s or a legitimate remote user with an expired token would ban *themselves* — and everyone sharing their NAT address. Breeze's app backs off to the offline state on an auth failure instead of continuing its 5 s poll, and pauses polling while re-pairing and while backgrounded — keep that behaviour if you fork the client.
+
+### 3.1 Reading the auth log (since 3.0.2)
+
+Bans and lockouts are unguessable without knowing *why* a request was refused. The server logs every auth failure to the `meow-ac.auth` logger with a reason code, the client IP, and an 8-character key-id hint (never a secret):
+
+```bash
+sudo journalctl -u breeze-core | grep "auth failed"
+# auth failed: reason=clock_skew status=401 ip=203.0.113.7 key=1a2b3c4d GET /api/units server_time=… client_time=…
+```
+
+| reason | meaning | client should |
+|---|---|---|
+| `clock_skew` | the device's clock is outside `AC_AUTH_SKEW_SECONDS` (default 60) | re-sign using the returned `server_time` — **not** re-pair |
+| `replay` | that nonce was already spent (a retried request) | retry with a fresh nonce |
+| `incomplete_signature` | missing `X-Breeze-*` headers | fix the request |
+| `unknown_key` / `expired` | credential revoked or lapsed | re-enroll |
+| `bad_signature` | signature didn't verify against the stored public key | re-enroll |
+| `bad_api_key` / `no_credential` | wrong or absent `X-API-Key` / device credential | fix config or enroll |
+
+The first three are returned with `"retryable": true`. **A client must never delete its credential over a retryable failure** — re-pairing needs an admin on the LAN, so doing that to a user who is away from home strands them. Enrolments and revocations are logged too (`device enrolled:` / `device revoked:`), which is what you want when someone reports "it logged me out yesterday". Set the logger to DEBUG for a successful-auth trace during an investigation.
 
 ---
 
