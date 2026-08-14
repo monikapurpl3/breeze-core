@@ -179,7 +179,7 @@ wrapper, the rc.d service, and the env file:
 
 ```sh
 # FreeBSD:  pkg install -y python312 rust
-# OpenBSD:  pkg_add python%3.12 rust
+# OpenBSD:  pkg_add rust              # python3.13 is already there on 7.9
 # NetBSD:   pkgin -y install python312 rust
 #   (rust builds pydantic-core; pip comes via venv/ensurepip; a C compiler ships in base)
 
@@ -201,12 +201,17 @@ which the CI image doesn't reliably ship). The full CLI
 (`serve`/`pair`/`diag`/`approve`/…) and every API feature work exactly as on
 Linux.
 
-**FreeBSD is verified on real hardware** (FreeBSD 15.1): the installer +
-rc.d service run, and `mkpkg-freebsd.sh` builds a **native `.pkg`** that
-clean-installs via `pkg add` and serves — attached to releases and, once
-v3.0.0 is stable, served from a signed `pkg` repo. **NetBSD is verified on
-real hardware too** (NetBSD 10.1): the installer, the `rc.d` service, and the
-health check all pass. It needs a release whose pkgsrc binary repo carries
-`python312` + `rust` — stable **10.x** does; a fresh **11.0-RC** repo may not
-yet. Ports/pkgsrc submissions are welcome — `packaging/bsd/` has the rc
-scripts and installer to build on.
+**All three are verified on real hardware** as of 3.0.2 — installer, rc service
+and health check pass on **FreeBSD 15.1**, **NetBSD 11.0** and **OpenBSD 7.9**:
+
+| | verified on | binary package |
+|---|---|---|
+| FreeBSD | 15.1 | **native `.pkg`** (`mkpkg-freebsd.sh`) + signed `pkg` repo on bolero |
+| NetBSD | 11.0 | **binary package** (`mkpkg-netbsd.sh`) + `pkgin` repo on bolero |
+| OpenBSD | 7.9 | source install only (`rcctl`-managed) |
+
+NetBSD needs a release whose pkgsrc binary repo carries `python312` + `rust`
+(11.0 and 10.x do; a fresh *RC* repo may not yet). OpenBSD needs `pkg_add rust`
+to build pydantic-core — python3.13 is already present on 7.9. Ports/pkgsrc
+submissions are welcome — `packaging/bsd/` has the rc scripts and installer to
+build on.
