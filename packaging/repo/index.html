@@ -215,17 +215,23 @@ echo "src/gz breeze_core https://bolero.salataputarica.hr.eu.org/openwrt/$(. /et
   &gt;&gt; /etc/opkg/customfeeds.conf
 opkg update &amp;&amp; opkg install breeze-core</pre>
     <p class="dim">Signed with <b>usign</b>, the same signer OpenWrt itself uses, so <code>opkg update</code>
-       verifies the feed. Needs OpenWrt 23.05+ and <b>~65 MB of storage</b> — so x86 boxes, NAS/RPi-class
-       devices, or a router with
-       <a href="https://openwrt.org/docs/guide-user/additional-software/extroot_configuration">extroot</a>.</p>
+       verifies the feed. Needs OpenWrt 23.05+. <b>Sizes are per architecture</b> — you only ever download
+       your own: about <b>24 MB to fetch, ~51–63 MB installed</b> (a private Python runtime and every
+       dependency, so there's nothing else to install). That means x86 boxes, NAS/RPi-class devices, or a
+       router with <a href="https://openwrt.org/docs/guide-user/additional-software/extroot_configuration">extroot</a>.</p>
     <div class="note joke"><b>No mips build — a genuinely mipsed opportunity.</b> 🥁 Two hard walls, not
-      laziness: the packages wrap a self-contained Python bundle built on <b>Alpine</b>, and Alpine
-      publishes no mips images at all (x86, x86_64, armhf, armv7, aarch64, ppc64le, s390x, riscv64 — no
-      <code>mips_24kc</code> / <code>mipsel_24kc</code>), so there's nothing to build the musl bundle
-      <i>on</i>; and PyInstaller can't cross-compile, it has to run on the target architecture. Even past
-      that, a typical mips router has 8–16 MB of flash against a ~65 MB payload. For those, a small
-      x86/ARM64 box beside the router beats fighting the flash — or build from source with the
-      <a href="/src/">source tarball</a> if your device has real storage.</div>
+      laziness. The packages wrap a self-contained Python bundle built on <b>Alpine</b>, and Alpine
+      publishes no mips images at all (386, amd64, arm, arm64, ppc64le, s390x, and riscv64 since 3.20 —
+      never <code>mips_24kc</code> or <code>mipsel_24kc</code>), so there is nothing to build the musl
+      bundle <i>on</i>; and PyInstaller cannot cross-compile — it has to run on the target architecture.
+      Even past that, a typical mips router has 8–16 MB of flash, which loses to a 24 MB download before
+      you even reach the 51 MB installed. A small x86/ARM64 box beside the router beats fighting the flash;
+      or build from source with the <a href="/src/">source tarball</a> if the device has real storage.</div>
+    <div class="note"><b>RISC-V:</b> unlike mips, <code>riscv64</code> is genuinely buildable — Alpine has
+      published it since 3.20, and riscv64 boards have storage to spare. It isn't in the feed yet only
+      because the musl bundle is pinned to Alpine 3.19 for OpenWrt 23.05's musl 1.2.4 floor. Want it?
+      <a href="https://github.com/monikapurpl3/breeze-core/issues">Open an issue</a> — meanwhile the
+      <a href="/src/">source tarball</a> builds fine on any riscv64 distro with Rust available.</div>
   </section>
 
   <section id="freebsd" style="--c:var(--fbsd)">
