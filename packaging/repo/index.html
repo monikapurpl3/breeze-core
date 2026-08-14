@@ -6,61 +6,100 @@
 <title>Breeze Core package repository</title>
 <style>
   :root{
-    --bg:#080a0d; --panel:#11151b; --panel2:#161b23; --line:#232a34;
-    --fg:#e8edf2; --dim:#8e9aa8; --code:#0d1116;
-    /* one colour per package family — used for the rule, the heading and the
-       code-block edge, so you can find your section by colour alone */
-    --deb:#d63a6a; --rpm:#3c8ce7; --suse:#54c15b; --arch:#3fb8f0;
-    --alpine:#6a7fe8; --owrt:#f0902f; --fbsd:#e04a3f; --nbsd:#f2a43a;
-    --obsd:#f2d235; --after:#4fd1c5; --src:#a97bf0;
+    /* Typography: a considered system stack — no webfont, so nothing to fetch
+       and nothing to leak, but it lands on Segoe UI Variable / SF / Inter where
+       those exist rather than falling back to plain Arial. */
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI Variable Text","Segoe UI",
+           Inter,Roboto,"Helvetica Neue",Arial,sans-serif;
+    --display:ui-sans-serif,system-ui,-apple-system,"Segoe UI Variable Display","Segoe UI",
+              Inter,Roboto,sans-serif;
+    --mono:ui-monospace,"Cascadia Mono","JetBrains Mono","SF Mono",SFMono-Regular,
+           Menlo,Consolas,"Liberation Mono",monospace;
+
+    --bg:#080a0e; --panel:#10141a; --panel2:#141922; --line:#212834;
+    --fg:#e9eef4; --dim:#8d99a8; --codebg:#0b0f14;
+
+    /* one colour per package family — drives its rule, heading, code tint */
+    --deb:#e0507c; --rpm:#4d97ea; --suse:#5fc768; --arch:#48bdf2;
+    --alpine:#7b8cf0; --owrt:#f2982f; --fbsd:#e35a4a; --nbsd:#f0ad45;
+    --obsd:#efd340; --after:#4fd1c5; --src:#b189f2;
   }
   *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
   body{margin:0;background:
-        radial-gradient(1100px 500px at 12% -8%, #16303a 0%, transparent 60%),
-        radial-gradient(900px 420px at 100% 0%, #2a1638 0%, transparent 55%),
+        radial-gradient(1200px 520px at 10% -10%, #14313d 0%, transparent 62%),
+        radial-gradient(950px 430px at 102% -2%, #291640 0%, transparent 58%),
         var(--bg);
-      color:var(--fg);font:15px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-      padding:40px 18px 72px}
-  main{max-width:900px;margin:0 auto}
-  h1{font-size:30px;margin:0 0 6px;letter-spacing:-.02em;
-     background:linear-gradient(92deg,#4fd1c5,#5aa9f5 42%,#c07bf0 78%,#f2a43a);
+      color:var(--fg);font-family:var(--sans);font-size:15.5px;line-height:1.7;
+      font-feature-settings:"kern" 1,"liga" 1;-webkit-font-smoothing:antialiased;
+      padding:44px 20px 80px}
+  main{max-width:920px;margin:0 auto}
+
+  h1{font-family:var(--display);font-size:34px;line-height:1.15;font-weight:700;
+     letter-spacing:-.024em;margin:0 0 8px;
+     background:linear-gradient(94deg,#5fe0d3,#5aa9f5 40%,#c78bf2 74%,#f2ad4a);
      -webkit-background-clip:text;background-clip:text;color:transparent}
-  .sub{color:var(--dim);font-size:14px;margin:0 0 20px}
-  .ver{display:inline-block;background:linear-gradient(92deg,#0f766e,#155e75);
-       color:#eafffb;border-radius:999px;padding:2px 12px;font-weight:700;font-size:13px}
-  .intro{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin:18px 0}
-  .intro b{color:#fff}
-  .toc{display:flex;flex-wrap:wrap;gap:8px;margin:22px 0 6px}
-  .toc a{display:inline-block;padding:6px 13px;border-radius:999px;font-size:13.5px;
-         font-weight:600;text-decoration:none;color:#06121a;background:#425063}
-  .toc a:hover{filter:brightness(1.14)}
-  .t-deb{background:var(--deb);color:#fff!important}.t-rpm{background:var(--rpm);color:#04121f!important}
+  .sub{color:var(--dim);font-size:14.5px;margin:0 0 22px;max-width:64ch}
+  .ver{display:inline-block;background:linear-gradient(94deg,#0f766e,#155e75);
+       color:#eafffb;border-radius:999px;padding:2px 12px;font-weight:650;
+       font-size:13px;letter-spacing:.01em;font-variant-numeric:tabular-nums}
+
+  .intro{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+         padding:17px 20px;margin:20px 0;font-size:14.5px;max-width:none}
+  .intro b{color:#fff;font-weight:650}
+
+  .toc{display:flex;flex-wrap:wrap;gap:8px;margin:24px 0 4px}
+  .toc a{padding:6px 14px;border-radius:999px;font-size:13.5px;font-weight:650;
+         letter-spacing:.005em;text-decoration:none;background:#3d4a5c;color:#eaf2fa}
+  .toc a:hover{filter:brightness(1.15)}
+  .t-deb{background:var(--deb);color:#26060f!important}.t-rpm{background:var(--rpm);color:#04121f!important}
   .t-suse{background:var(--suse);color:#04140a!important}.t-arch{background:var(--arch);color:#04121f!important}
-  .t-alpine{background:var(--alpine);color:#fff!important}.t-owrt{background:var(--owrt);color:#1a0d00!important}
-  .t-fbsd{background:var(--fbsd);color:#fff!important}.t-nbsd{background:var(--nbsd);color:#1a1000!important}
+  .t-alpine{background:var(--alpine);color:#0a0c26!important}.t-owrt{background:var(--owrt);color:#1a0d00!important}
+  .t-fbsd{background:var(--fbsd);color:#230703!important}.t-nbsd{background:var(--nbsd);color:#1a1000!important}
   .t-obsd{background:var(--obsd);color:#1a1600!important}.t-after{background:var(--after);color:#04201d!important}
 
-  section{margin-top:34px;border-left:4px solid var(--c,#425063);padding-left:16px}
-  section>h2{font-size:20px;margin:0 0 2px;color:var(--c,#fff);letter-spacing:-.01em}
-  .who{display:block;font-size:12.5px;font-weight:400;color:var(--dim);margin:2px 0 10px}
-  .who code{color:#cfe;background:#1b2430;padding:1px 6px;border-radius:5px}
-  code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px}
-  pre{background:var(--code);border:1px solid var(--line);border-left:3px solid var(--c,#425063);
-      border-radius:10px;padding:14px 15px;overflow-x:auto;margin:10px 0}
-  pre .c{color:#6f7f90}          /* comments */
-  a{color:#67dcd2;text-decoration:none} a:hover{text-decoration:underline}
-  .dim{color:var(--dim);font-size:13px}
-  .note{background:#101a22;border-left:3px solid var(--rpm);border-radius:0 10px 10px 0;
-        padding:10px 15px;margin:12px 0;font-size:13.5px;color:#c2ced9}
-  .note b{color:#fff}
-  .warn{background:#1e1408;border-left:3px solid var(--owrt)}
-  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(272px,1fr));gap:14px;margin-top:12px}
-  .card{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:13px 15px}
-  .card h3{margin:0 0 2px;font-size:14.5px;color:#fff}
-  .card .os{display:block;font-size:12px;color:var(--dim);margin-bottom:8px}
-  .card pre{margin:0;background:var(--code);border-left-width:3px}
-  footer{margin-top:46px;padding-top:18px;border-top:1px solid var(--line);color:var(--dim);font-size:13px}
-  footer b{color:#dbe4ec}
+  section{margin-top:38px;border-left:3px solid var(--c,#3d4a5c);padding-left:18px}
+  section>h2{font-family:var(--display);font-size:21px;font-weight:650;
+             letter-spacing:-.015em;margin:0 0 2px;color:var(--c,#fff)}
+  .who{display:block;font-size:13px;font-weight:400;color:var(--dim);margin:3px 0 12px}
+  .who code{color:#d3e7f5;background:#1a2230;padding:1px 6px;border-radius:5px}
+
+  code,pre{font-family:var(--mono);font-size:13px;font-variant-ligatures:none}
+  /* Code blocks pick up the section's colour as a faint wash — enough to tie
+     them to their platform, light enough to keep contrast high. */
+  pre{background:var(--codebg);
+      background:color-mix(in srgb, var(--c,#3d4a5c) 7%, var(--codebg));
+      border:1px solid #1c2431;
+      border-color:color-mix(in srgb, var(--c,#3d4a5c) 20%, #1c2431);
+      border-left:3px solid var(--c,#3d4a5c);
+      border-radius:10px;padding:14px 16px;overflow-x:auto;margin:11px 0;
+      line-height:1.6;tab-size:2}
+  pre .c{color:#74838f;font-style:italic}
+  a{color:#6fdfd5;text-decoration:none}a:hover{text-decoration:underline}
+  .dim{color:var(--dim);font-size:13.5px}
+
+  .note{background:#0f1922;border:1px solid #1c2836;border-left:3px solid var(--rpm);
+        border-radius:0 10px 10px 0;padding:11px 16px;margin:13px 0;
+        font-size:13.5px;color:#c4d0dc}
+  .note b{color:#fff;font-weight:650}
+  .warn{background:#1c1409;border-color:#2c2010;border-left-color:var(--owrt)}
+  .joke{background:#141024;border-color:#241c3a;border-left-color:var(--src)}
+
+  /* Init systems: one per row, full width — a grid of tiny cells made these
+     unreadable. */
+  .inits{margin-top:14px}
+  .init{background:var(--panel2);border:1px solid var(--line);
+        border-left:3px solid var(--c,#3d4a5c);border-radius:0 12px 12px 0;
+        padding:14px 18px;margin-bottom:12px}
+  .init-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px;margin-bottom:9px}
+  .init-h h3{font-family:var(--display);margin:0;font-size:16px;font-weight:650;
+             letter-spacing:-.01em;color:var(--c,#fff)}
+  .init-h .os{font-size:12.5px;color:var(--dim)}
+  .init pre{margin:0}
+
+  footer{margin-top:50px;padding-top:20px;border-top:1px solid var(--line);
+         color:var(--dim);font-size:13.5px;line-height:1.85}
+  footer b{color:#dde5ee;font-weight:650}
 </style>
 </head>
 <body>
@@ -94,7 +133,7 @@
   <section id="debian" style="--c:var(--deb)">
     <h2>Debian family</h2>
     <span class="who">Debian · Ubuntu · Mint · Pop!_OS · Raspberry Pi OS · Devuan — <code>apt</code></span>
-<pre><span class="c"># the key goes in its own keyring, referenced by the sources entry</span>
+<pre><span class="c"># the key gets its own keyring, referenced by the sources entry</span>
 curl -fsSL https://bolero.salataputarica.hr.eu.org/breeze-core.asc \
   | sudo gpg --dearmor -o /usr/share/keyrings/breeze-core.gpg
 echo "deb [signed-by=/usr/share/keyrings/breeze-core.gpg] https://bolero.salataputarica.hr.eu.org/deb stable main" \
@@ -121,7 +160,7 @@ sudo dnf install breeze-core</pre>
       On <b>dnf 4</b> (RHEL 8/9, Fedora ≤ 40) the key would be imported interactively on first install —
       the <code>rpm --import</code> above just avoids the prompt. On <b>dnf 5</b> (Fedora 41+, RHEL 10) that
       pre-import is <b>required</b>: dnf 5 no longer pulls the key from <code>gpgkey=</code> itself.
-      Using <code>dnf config-manager</code> instead? The verb changed too — dnf 5 wants
+      Prefer <code>dnf config-manager</code>? The verb changed too — dnf 5 wants
       <code>dnf config-manager addrepo --from-repofile=&lt;url&gt;</code> where dnf 4 used <code>--add-repo</code>.</div>
   </section>
 
@@ -134,7 +173,7 @@ sudo zypper addrepo --refresh --gpgcheck \
   https://bolero.salataputarica.hr.eu.org/rpm/x86_64/ breeze-core
 sudo zypper --gpg-auto-import-keys refresh
 sudo zypper install breeze-core</pre>
-    <p class="dim">Same rpms as the Fedora/RHEL section — zypper just adds and refreshes repos its own way.
+    <p class="dim">The same rpms as the Fedora/RHEL section — zypper just adds and refreshes repos its own way.
        <code>--gpg-auto-import-keys</code> accepts the repo signature without prompting.</p>
   </section>
 
@@ -169,14 +208,24 @@ apk update &amp;&amp; apk add breeze-core</pre>
 
   <section id="openwrt" style="--c:var(--owrt)">
     <h2>OpenWrt</h2>
-    <span class="who">x86_64 / aarch64 routers with ~65&nbsp;MB free (extroot counts) — <code>opkg</code> · run as root</span>
+    <span class="who">x86_64 · aarch64_generic · aarch64_cortex-a53 · aarch64_cortex-a72 — <code>opkg</code> · run as root</span>
 <pre>wget -q -O /tmp/breeze.pub https://bolero.salataputarica.hr.eu.org/openwrt/breeze-core-usign.pub
 cp /tmp/breeze.pub "/etc/opkg/keys/$(usign -F -p /tmp/breeze.pub)"
 echo "src/gz breeze_core https://bolero.salataputarica.hr.eu.org/openwrt/$(. /etc/openwrt_release; echo $DISTRIB_ARCH)" \
   &gt;&gt; /etc/opkg/customfeeds.conf
 opkg update &amp;&amp; opkg install breeze-core</pre>
-    <p class="dim">Signed with <b>usign</b>, the same signer OpenWrt itself uses, so <code>opkg update</code> verifies the feed.
-       Works on OpenWrt 23.05+ (the musl builds target musl 1.2.4 for exactly that reason).</p>
+    <p class="dim">Signed with <b>usign</b>, the same signer OpenWrt itself uses, so <code>opkg update</code>
+       verifies the feed. Needs OpenWrt 23.05+ and <b>~65 MB of storage</b> — so x86 boxes, NAS/RPi-class
+       devices, or a router with
+       <a href="https://openwrt.org/docs/guide-user/additional-software/extroot_configuration">extroot</a>.</p>
+    <div class="note joke"><b>No mips build — a genuinely mipsed opportunity.</b> 🥁 Two hard walls, not
+      laziness: the packages wrap a self-contained Python bundle built on <b>Alpine</b>, and Alpine
+      publishes no mips images at all (x86, x86_64, armhf, armv7, aarch64, ppc64le, s390x, riscv64 — no
+      <code>mips_24kc</code> / <code>mipsel_24kc</code>), so there's nothing to build the musl bundle
+      <i>on</i>; and PyInstaller can't cross-compile, it has to run on the target architecture. Even past
+      that, a typical mips router has 8–16 MB of flash against a ~65 MB payload. For those, a small
+      x86/ARM64 box beside the router beats fighting the flash — or build from source with the
+      <a href="/src/">source tarball</a> if your device has real storage.</div>
   </section>
 
   <section id="freebsd" style="--c:var(--fbsd)">
@@ -214,8 +263,8 @@ ftp -o breeze-core-@VERSION@.tar.gz \
   https://bolero.salataputarica.hr.eu.org/src/breeze-core-@VERSION@.tar.gz
 tar xzf breeze-core-@VERSION@.tar.gz &amp;&amp; cd breeze-core
 doas sh packaging/bsd/install.sh</pre>
-    <div class="note warn"><b>No binary package for OpenBSD.</b> There's no signed repo to add here:
-      OpenBSD gets the source installer instead, which builds a self-contained virtualenv under
+    <div class="note warn"><b>No binary package for OpenBSD.</b> There's no repo to add here: OpenBSD gets
+      the source installer, which builds a self-contained virtualenv under
       <code>/usr/local/breeze-core</code> and installs an <code>rcctl</code>-managed service. The Linux
       packages on this page are Linux ELF binaries and cannot run on a BSD kernel; FreeBSD and NetBSD get
       native packages because their tooling (<code>pkg</code> / <code>pkg_create</code>) makes that
@@ -225,82 +274,103 @@ doas sh packaging/bsd/install.sh</pre>
 
   <section id="after" style="--c:var(--after)">
     <h2>After installing</h2>
-    <span class="who">three steps on every platform — then pick your init system below</span>
+    <span class="who">three steps on every platform — then find your init system below</span>
 <pre><span class="c"># 1. find your ACs and write the config</span>
 breeze-core pair
 <span class="c"># 2. set this machine's LAN IP (or keep 127.0.0.1 behind a reverse proxy)</span>
-<span class="c">#    Linux:   /etc/breeze-core/breeze-core.env        → BREEZE_HOST=...</span>
-<span class="c">#    FreeBSD: /usr/local/etc/breeze-core/breeze-core.env</span>
-<span class="c">#    NetBSD:  /usr/pkg/etc/breeze-core/breeze-core.env</span>
-<span class="c">#    OpenBSD: /etc/breeze-core/breeze-core.env</span>
-<span class="c"># 3. enable + start the service — see your init system:</span></pre>
+<span class="c">#    Linux    /etc/breeze-core/breeze-core.env             → BREEZE_HOST=...</span>
+<span class="c">#    FreeBSD  /usr/local/etc/breeze-core/breeze-core.env</span>
+<span class="c">#    NetBSD   /usr/pkg/etc/breeze-core/breeze-core.env</span>
+<span class="c">#    OpenBSD  /etc/breeze-core/breeze-core.env</span>
+<span class="c"># 3. enable + start the service — pick your init system:</span></pre>
 
-    <div class="grid">
-      <div class="card" style="--c:var(--rpm)">
-        <h3>systemd</h3><span class="os">Debian · Ubuntu · Fedora · RHEL · SUSE · Arch</span>
+    <div class="inits">
+      <div class="init" style="--c:var(--rpm)">
+        <div class="init-h"><h3>systemd</h3><span class="os">Debian · Ubuntu · Fedora · RHEL · SUSE · Arch</span></div>
 <pre>sudo systemctl enable --now breeze-core
-sudo systemctl status breeze-core</pre>
+sudo systemctl status breeze-core
+journalctl -u breeze-core -f            <span class="c"># follow the log</span></pre>
       </div>
-      <div class="card" style="--c:var(--alpine)">
-        <h3>OpenRC</h3><span class="os">Alpine · Artix (openrc) · Gentoo · Devuan</span>
+
+      <div class="init" style="--c:var(--alpine)">
+        <div class="init-h"><h3>OpenRC</h3><span class="os">Alpine · Artix (openrc) · Gentoo · Devuan</span></div>
 <pre>rc-update add breeze-core default
 rc-service breeze-core start
 rc-service breeze-core status</pre>
       </div>
-      <div class="card" style="--c:var(--arch)">
-        <h3>runit</h3><span class="os">Void · Artix (runit)</span>
-<pre><span class="c"># template: /usr/lib/breeze-core/deploy/runit-run</span>
+
+      <div class="init" style="--c:var(--arch)">
+        <div class="init-h"><h3>runit</h3><span class="os">Void · Artix (runit)</span></div>
+<pre><span class="c"># template ships at deploy/init/runit-run</span>
 sudo mkdir -p /etc/sv/breeze-core
-sudo cp .../runit-run /etc/sv/breeze-core/run
-sudo ln -s /etc/sv/breeze-core /var/service/</pre>
+sudo cp deploy/init/runit-run /etc/sv/breeze-core/run
+sudo chmod +x /etc/sv/breeze-core/run
+sudo ln -s /etc/sv/breeze-core /var/service/     <span class="c"># /run/runit/service on Void</span>
+sudo sv status breeze-core</pre>
       </div>
-      <div class="card" style="--c:var(--suse)">
-        <h3>s6 / s6-rc</h3><span class="os">Artix (s6) · Obarun</span>
-<pre><span class="c"># template: deploy/init/s6-run</span>
-sudo cp s6-run /etc/s6/sv/breeze-core/run
-sudo s6-rc-bundle-update add default breeze-core</pre>
+
+      <div class="init" style="--c:var(--suse)">
+        <div class="init-h"><h3>s6 / s6-rc</h3><span class="os">Artix (s6) · Obarun</span></div>
+<pre><span class="c"># template ships at deploy/init/s6-run</span>
+sudo mkdir -p /etc/s6/sv/breeze-core
+sudo cp deploy/init/s6-run /etc/s6/sv/breeze-core/run
+sudo chmod +x /etc/s6/sv/breeze-core/run
+sudo s6-rc-bundle-update add default breeze-core
+sudo s6-rc -u change breeze-core</pre>
       </div>
-      <div class="card" style="--c:var(--deb)">
-        <h3>SysV init</h3><span class="os">Devuan (sysvinit) · Slackware · older LTS</span>
-<pre>sudo cp deploy/init/sysv-breeze-core /etc/init.d/breeze-core
+
+      <div class="init" style="--c:var(--deb)">
+        <div class="init-h"><h3>SysV init</h3><span class="os">Devuan (sysvinit) · Slackware · older LTS releases</span></div>
+<pre><span class="c"># template ships at deploy/init/sysv-breeze-core</span>
+sudo cp deploy/init/sysv-breeze-core /etc/init.d/breeze-core
 sudo chmod +x /etc/init.d/breeze-core
-sudo update-rc.d breeze-core defaults   <span class="c"># or chkconfig --add</span>
-sudo service breeze-core start</pre>
+sudo update-rc.d breeze-core defaults    <span class="c"># RHEL-ish: chkconfig --add breeze-core</span>
+sudo service breeze-core start
+sudo service breeze-core status</pre>
       </div>
-      <div class="card" style="--c:var(--owrt)">
-        <h3>procd</h3><span class="os">OpenWrt</span>
+
+      <div class="init" style="--c:var(--owrt)">
+        <div class="init-h"><h3>procd</h3><span class="os">OpenWrt</span></div>
 <pre>/etc/init.d/breeze-core enable
-/etc/init.d/breeze-core start</pre>
+/etc/init.d/breeze-core start
+logread -e breeze-core                  <span class="c"># follow the log</span></pre>
       </div>
-      <div class="card" style="--c:var(--fbsd)">
-        <h3>rc.d (FreeBSD)</h3><span class="os">FreeBSD 14 · 15</span>
+
+      <div class="init" style="--c:var(--fbsd)">
+        <div class="init-h"><h3>rc.d — FreeBSD</h3><span class="os">FreeBSD 14 · 15</span></div>
 <pre>sudo sysrc breeze_core_enable=YES
 sudo service breeze_core start
-sudo service breeze_core status</pre>
+sudo service breeze_core status
+tail -f /var/log/breeze_core.log</pre>
       </div>
-      <div class="card" style="--c:var(--nbsd)">
-        <h3>rc.d (NetBSD)</h3><span class="os">NetBSD 10 · 11</span>
+
+      <div class="init" style="--c:var(--nbsd)">
+        <div class="init-h"><h3>rc.d — NetBSD</h3><span class="os">NetBSD 10 · 11</span></div>
 <pre>echo 'breeze_core=YES' | su root -c 'tee -a /etc/rc.conf'
 su root -c 'service breeze_core start'
-su root -c 'service breeze_core status'</pre>
+su root -c 'service breeze_core status'
+tail -f /var/log/breeze_core.log</pre>
       </div>
-      <div class="card" style="--c:var(--obsd)">
-        <h3>rcctl (OpenBSD)</h3><span class="os">OpenBSD 7.x</span>
+
+      <div class="init" style="--c:var(--obsd)">
+        <div class="init-h"><h3>rcctl — OpenBSD</h3><span class="os">OpenBSD 7.x</span></div>
 <pre>doas rcctl enable breeze_core
 doas rcctl start breeze_core
-doas rcctl check breeze_core</pre>
+doas rcctl check breeze_core
+<span class="c"># host/port live in /etc/breeze-core/breeze-core.env</span></pre>
       </div>
-      <div class="card" style="--c:var(--src)">
-        <h3>Windows</h3><span class="os">Windows 10 / 11 / Server — NSSM service</span>
-<pre><span class="c"># installed by the .exe; manage with:</span>
+
+      <div class="init" style="--c:var(--src)">
+        <div class="init-h"><h3>Windows service</h3><span class="os">Windows 10 · 11 · Server — installed by the .exe (NSSM)</span></div>
+<pre>Get-Service BreezeCore
 Restart-Service BreezeCore
-Get-Service BreezeCore</pre>
+<span class="c"># config lives in %ProgramData%\breeze-core</span></pre>
       </div>
     </div>
 
-    <p class="dim" style="margin-top:14px">Then open <code>http://&lt;BREEZE_HOST&gt;:8420</code>, enter the API key
+    <p class="dim" style="margin-top:16px">Then open <code>http://&lt;BREEZE_HOST&gt;:8420</code>, enter the API key
       from your <code>config.json</code>, and pair. The service runs as an unprivileged <b>breeze</b> user, and
-      uninstalling keeps your config and device tokens. Init templates for runit/s6/SysV live in
+      uninstalling keeps your config and device tokens. The runit/s6/SysV templates live in
       <a href="https://github.com/monikapurpl3/breeze-core/tree/main/deploy/init">deploy/init/</a>.</p>
   </section>
 
@@ -310,8 +380,8 @@ Get-Service BreezeCore</pre>
     <a href="/alpine/breeze-core@bolero.rsa.pub">RSA</a> (apk) ·
     <a href="/freebsd/breeze-freebsd-repo.rsa.pub">RSA</a> (FreeBSD pkg) ·
     <a href="/openwrt/breeze-core-usign.pub">usign</a> (OpenWrt)<br>
-    <b>Source:</b> <a href="/src/">source tarballs</a> (BSD + from-source installs) ·
-    <b>Other distros</b> (Void, Gentoo, Slackware, NixOS…) → tarballs, ebuilds, PKGBUILD, xbps template and a
+    <b>Source:</b> <a href="/src/">source tarballs</a> — for OpenBSD, mips, and any from-source install ·
+    <b>Other distros</b> (Void, Gentoo, Slackware, NixOS…) → tarballs, ebuild, PKGBUILD, xbps template and a
     Nix flake on <a href="https://github.com/monikapurpl3/breeze-core/blob/main/docs/PACKAGES.md">GitHub</a><br>
     <b>Browse:</b> <a href="/deb/">deb</a> · <a href="/rpm/">rpm</a> · <a href="/arch/">arch</a> ·
     <a href="/alpine/">alpine</a> · <a href="/openwrt/">openwrt</a> · <a href="/freebsd/">freebsd</a> ·
