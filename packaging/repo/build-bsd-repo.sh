@@ -39,6 +39,21 @@ cp "$FREEBSD_REPO_DIR"/* "$OUT/freebsd/"   # .pkg + meta.conf + meta + packagesi
 cp "$KEYS/breeze-freebsd-repo.rsa.pub" "$OUT/freebsd/breeze-freebsd-repo.rsa.pub"
 echo "  $(ls "$OUT/freebsd" | tr '\n' ' ')"
 
+echo "=== source tarball (OpenBSD / any from-source install) ==="
+# OpenBSD gets no binary package — pkg_create there wants a ports-style packing
+# list, and the Linux bundles are ELF binaries that can't run on a BSD kernel.
+# So publish the source next to the repos and let packaging/bsd/install.sh do
+# the work; the landing page's OpenBSD section fetches exactly this path.
+rm -rf "$OUT/src"; mkdir -p "$OUT/src"
+if git -C . rev-parse --git-dir >/dev/null 2>&1; then
+  git archive --format=tar.gz --prefix="breeze-core/" \
+    -o "$OUT/src/breeze-core-${VER}.tar.gz" HEAD
+else
+  echo "  (not a git checkout — skipping source tarball)"
+fi
+[ -f "$OUT/src/breeze-core-${VER}.tar.gz" ] && \
+  echo "  breeze-core-${VER}.tar.gz ($(wc -c < "$OUT/src/breeze-core-${VER}.tar.gz") bytes)"
+
 echo "=== NetBSD pkgin repo ==="
 [ -f "$NETBSD_PKG" ] || { echo "missing NetBSD package $NETBSD_PKG"; exit 1; }
 rm -rf "$OUT/netbsd"; mkdir -p "$OUT/netbsd/All"
