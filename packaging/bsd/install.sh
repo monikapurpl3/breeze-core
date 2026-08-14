@@ -37,8 +37,11 @@ APPDIR="$PREFIX/breeze-core"
 BIN="$PREFIX/bin/breeze-core"
 
 # --- python -----------------------------------------------------------------
-PY="$(command -v python3.12 || command -v python3.11 || command -v python3 || true)"
-[ -n "$PY" ] || die "python 3.11+ not found — install it first (e.g. FreeBSD: pkg install python311; OpenBSD: pkg_add python%3.11; NetBSD: pkgin install python311)"
+# Newest first. OpenBSD 7.9 ships python3.13 and nothing older, so a list that
+# stopped at 3.12 fell through to a bare `python3` that may not exist there.
+PY="$(command -v python3.14 || command -v python3.13 || command -v python3.12 \
+      || command -v python3.11 || command -v python3 || true)"
+[ -n "$PY" ] || die "python 3.11+ not found — install it first (e.g. FreeBSD: pkg install python312; OpenBSD: pkg_add python%3.13; NetBSD: pkgin install python312)"
 say "using $PY ($("$PY" --version 2>&1))"
 
 # --- service user -----------------------------------------------------------

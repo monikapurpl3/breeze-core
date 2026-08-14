@@ -1,7 +1,18 @@
 #!/bin/ksh
 # Breeze Core — OpenBSD rc.d service (installed to /etc/rc.d/breeze_core).
 # Enable + start with:  rcctl enable breeze_core && rcctl start breeze_core
-# Flags can be overridden in /etc/rc.conf.local (breeze_core_flags=...).
+# Host/port come from /etc/breeze-core/breeze-core.env; extra flags can also go
+# in /etc/rc.conf.local as breeze_core_flags=...
+#
+# IMPORTANT (learned on real OpenBSD 7.9): rc.subr starts the daemon through
+# `su -l`, which resets the environment — so exporting PYTHONPATH/AC_* from this
+# script does NOT reach the process, and it dies with
+# "ModuleNotFoundError: No module named 'meow_ac'".
+# Hence the daemon is the installed `breeze-core` wrapper, which sets AC_CONFIG
+# and PYTHONPATH itself (devices.json/programs.json are derived from AC_CONFIG's
+# directory, so that one variable is enough). Because the wrapper exec()s the
+# venv python, the process rc.subr must look for is python's command line, not
+# the wrapper's — that's what `pexp` overrides.
 
 _appdir=/usr/local/breeze-core
 _etcdir=/etc/breeze-core
@@ -11,16 +22,14 @@ BREEZE_PORT=8420
 BREEZE_OPTS=""
 [ -r "${_etcdir}/breeze-core.env" ] && . "${_etcdir}/breeze-core.env"
 
-export PYTHONPATH="${_appdir}"
-export AC_CONFIG="${_etcdir}/config.json"
-export AC_DEVICES="${_etcdir}/devices.json"
-export AC_PROGRAMS="${_etcdir}/programs.json"
-
-daemon="${_appdir}/venv/bin/python"
-daemon_flags="-m meow_ac.cli serve --host ${BREEZE_HOST} --port ${BREEZE_PORT} ${BREEZE_OPTS}"
+daemon="/usr/local/bin/breeze-core"
+daemon_flags="serve --host ${BREEZE_HOST} --port ${BREEZE_PORT} ${BREEZE_OPTS}"
 daemon_user="breeze"
 
 . /etc/rc.d/rc.subr
+
+# Match the exec'd interpreter, not the wrapper (see note above).
+pexp="${_appdir}/venv/bin/python -m meow_ac.cli serve --host ${BREEZE_HOST} --port ${BREEZE_PORT}.*"
 
 rc_bg=YES
 rc_reload=NO
