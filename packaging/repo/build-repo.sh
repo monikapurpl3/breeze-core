@@ -64,8 +64,13 @@ fi
 
 rm -rf "$OUT"; mkdir -p "$OUT"
 cp "$KEYS/gpg-public.asc" "$OUT/breeze-core.asc"
+# Public keys are copied out of keys/, which is kept tight (600). They MUST
+# end up world-readable or the web server 403s them and no client can verify
+# the repo — so chmod explicitly instead of inheriting the private-key mode.
+chmod 644 "$OUT/breeze-core.asc"
 mkdir -p "$OUT/alpine"
 cp "$KEYS/$APK_KEY_NAME.rsa.pub" "$OUT/alpine/$APK_KEY_NAME.rsa.pub"
+chmod 644 "$OUT/alpine/$APK_KEY_NAME.rsa.pub"
 
 # --- apt (deb) ----------------------------------------------------------------
 echo "=== apt repo ==="
@@ -202,6 +207,7 @@ for d in "$R"/*/; do (
     "$US" -S -m Packages -s /work/packaging/repo/keys/usign.sec -x Packages.sig
 ); done
 cp "$K/usign.pub" "$R/breeze-core-usign.pub"
+chmod 644 "$R/breeze-core-usign.pub"
 "$US" -F -p "$K/usign.pub" > "$R/breeze-core-usign.fingerprint"
 echo "  feed signed (usign fpr $(cat "$R/breeze-core-usign.fingerprint"))"
 EOS

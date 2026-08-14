@@ -17,18 +17,35 @@ TS="$(date +%Y%m%d-%H%M%S)"
 
 [ -f "$OUT/index.html" ] || { echo "no repo tree — run build-repo.sh first"; exit 1; }
 
+# build-repo.sh does its signing inside containers running as root, so parts of
+# the tree come back root-owned and mode 600 — including the copied *public*
+# keys. Left alone that bites twice: tar can't read them (so the upload aborts
+# half-way) and anything that does land is unreadable by the web server (403 on
+# breeze-core.asc, i.e. no apt/dnf/pacman user can verify the repo). Normalise
+# before shipping, and again after extraction so the served tree is world-readable.
+echo "=== normalising ownership/permissions ==="
+if [ -n "$(find "$OUT" ! -readable -print -quit 2>/dev/null)" ]; then
+  sudo chown -R "$(id -un):$(id -gn)" "$OUT"
+fi
+chmod -R u+rwX,go+rX "$OUT"
+
 echo "=== publishing to $HOST:$ROOT/releases/$TS ==="
 # NOTE: no gzip (-cf, not -czf). The tree is almost entirely already-compressed
 # packages (.deb/.rpm/.apk/.pkg.tar.zst/.ipk/.pkg/.tgz), so re-gzipping only
 # burns CPU and slows the pipe for ~zero size gain.
+#
+# `set -o pipefail` matters here: without it a tar that aborts mid-stream still
+# lets the remote side swap `current` to a PARTIAL tree.
+set -o pipefail
 tar -C "$OUT" -cf - . | ssh "$HOST" "
   set -e
   mkdir -p '$ROOT/releases/$TS'
   tar -xf - -C '$ROOT/releases/$TS'
+  chmod -R u+rwX,go+rX '$ROOT/releases/$TS'
   ln -sfn 'releases/$TS' '$ROOT/current.new' && mv -Tf '$ROOT/current.new' '$ROOT/current'
   cd '$ROOT/releases' && ls -1dt */ | tail -n +4 | xargs -r rm -rf
   echo 'live releases:' && ls -1dt '$ROOT/releases'/*/ | head -3
-"
+" || { echo "PUBLISH FAILED — 'current' left pointing at the previous release"; exit 1; }
 
 echo "=== smoke check (best-effort; deploy is already live) ==="
 # Bounded + non-fatal: the public endpoint can be slow, and the swap above has
