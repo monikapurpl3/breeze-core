@@ -4,8 +4,9 @@
 # (3.20's musl 1.2.5 links pwritev2, which 23.05 lacks). Newer musl systems
 # run older-musl binaries fine, so this one bundle covers them all.
 # Works for linux/amd64, linux/arm64 and linux/riscv64 (pick with --platform).
-# riscv64 MUST override ALPINE_TAG to 3.20+ — Alpine publishes no riscv64 image
-# before 3.20. That bundle therefore carries musl 1.2.5 and is NOT
+# riscv64 MUST override ALPINE_TAG to 3.22 — Alpine publishes no riscv64 image
+# before 3.20, and its rust is too old to build pydantic-core before 3.22.
+# That bundle therefore carries a newer musl and is NOT
 # OpenWrt-23.05-safe, which is fine: riscv64 ships for Alpine / Void-musl.
 #
 #   docker buildx build --platform linux/amd64 -f packaging/binary/Dockerfile.musl \
