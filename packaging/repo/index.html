@@ -237,11 +237,17 @@ opkg update &amp;&amp; opkg install breeze-core</pre>
       Even past that, a typical mips router has 8–16 MB of flash, which loses to a 24 MB download before
       you even reach the 51 MB installed. A small x86/ARM64 box beside the router beats fighting the flash;
       or build from source with the <a href="/src/">source tarball</a> if the device has real storage.</div>
-    <div class="note"><b>RISC-V:</b> unlike mips, <code>riscv64</code> is genuinely buildable — Alpine has
-      published it since 3.20, and riscv64 boards have storage to spare. It isn't in the feed yet only
-      because the musl bundle is pinned to Alpine 3.19 for OpenWrt 23.05's musl 1.2.4 floor. Want it?
-      <a href="https://github.com/monikapurpl3/breeze-core/issues">Open an issue</a> — meanwhile the
-      <a href="/src/">source tarball</a> builds fine on any riscv64 distro with Rust available.</div>
+    <div class="note"><b>RISC-V:</b> unlike mips, <code>riscv64</code> is genuinely buildable and is being
+      added — as a <b>musl</b> build (Alpine, Void-musl). Expect it to land <b>last of any architecture</b>,
+      and to lag the version above: riscv64 has no prebuilt wheels on PyPI, so every dependency compiles
+      from source — including pydantic-core's Rust and PyInstaller's own bootloader — entirely under QEMU
+      emulation. It is by far the slowest target we build.<br><br>
+      <b>There will be no glibc/riscv64 build</b> for now. The glibc bundle is built on AlmaLinux 8 on
+      purpose — its glibc 2.28 is the floor that lets one binary run on everything from RHEL 8 upwards —
+      and AlmaLinux publishes no riscv64 image. Switching to a base that does would set a *newer* glibc
+      floor for riscv64 than for every other architecture, which is a compatibility promise worth making
+      deliberately rather than by accident. Until then, glibc riscv64 users want the
+      <a href="/src/">source tarball</a>, which builds anywhere Rust is available.</div>
   </section>
 
   <section id="freebsd" style="--c:var(--fbsd)">
