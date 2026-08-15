@@ -22,7 +22,7 @@
     /* one colour per package family — drives its rule, heading, code tint */
     --deb:#e0507c; --rpm:#4d97ea; --suse:#5fc768; --arch:#48bdf2;
     --alpine:#7b8cf0; --owrt:#f2982f; --fbsd:#e35a4a; --nbsd:#f0ad45;
-    --obsd:#efd340; --after:#4fd1c5; --src:#b189f2;
+    --obsd:#efd340; --after:#4fd1c5; --src:#b189f2; --droid:#7fd66b;
   }
   *{box-sizing:border-box}
   html{-webkit-text-size-adjust:100%}
@@ -57,6 +57,7 @@
   .t-alpine{background:var(--alpine);color:#0a0c26!important}.t-owrt{background:var(--owrt);color:#1a0d00!important}
   .t-fbsd{background:var(--fbsd);color:#230703!important}.t-nbsd{background:var(--nbsd);color:#1a1000!important}
   .t-obsd{background:var(--obsd);color:#1a1600!important}.t-after{background:var(--after);color:#04201d!important}
+  .t-droid{background:var(--droid);color:#06210a!important}
 
   section{margin-top:38px;border-left:3px solid var(--c,#3d4a5c);padding-left:18px}
   section>h2{font-family:var(--display);font-size:21px;font-weight:650;
@@ -117,6 +118,14 @@
     verify against the published keys below. amd64/x86_64 and arm64/aarch64 for Linux; amd64 for the BSDs.
   </div>
 
+  <div class="note warn"><b>Some platforms can lag a release behind.</b> Linux <b>amd64/arm64</b> packages
+    are built and signed for every release, so they're always current. The <b>BSDs</b>, <b>OpenWrt</b> and
+    <b>RISC-V</b> can't be: BSD packages must be produced on a real FreeBSD/NetBSD machine (their
+    <code>pkg</code>/<code>pkg_create</code> tooling doesn't exist on Linux), and OpenWrt and riscv64 are
+    cross-built or emulated — riscv64 has no prebuilt wheels at all, so it compiles from source under
+    emulation. Check the version on the package against <span class="ver">v@VERSION@</span> above; if it's
+    behind and you need the newest, the <a href="/src/">source tarball</a> always matches this page.</div>
+
   <nav class="toc">
     <a class="t-deb" href="#debian">Debian / Ubuntu</a>
     <a class="t-rpm" href="#rhel">Fedora / RHEL</a>
@@ -127,6 +136,7 @@
     <a class="t-fbsd" href="#freebsd">FreeBSD</a>
     <a class="t-nbsd" href="#netbsd">NetBSD</a>
     <a class="t-obsd" href="#openbsd">OpenBSD</a>
+    <a class="t-droid" href="#android">Android app</a>
     <a class="t-after" href="#after">After install</a>
   </nav>
 
@@ -278,6 +288,27 @@ doas sh packaging/bsd/install.sh</pre>
       <a href="https://github.com/monikapurpl3/breeze-core/tree/main/packaging/bsd">packaging/bsd/</a>.</div>
   </section>
 
+  <section id="android" style="--c:var(--droid)">
+    <h2>Breeze for Android</h2>
+    <span class="who">the phone client — <b>not</b> the server · sideload APK · Android 7+</span>
+    <p class="dim" style="margin-top:0">Everything above installs the <b>server</b>. This is the app that
+      talks to it: one AC per screen, home-screen widgets, server-side schedules, and an Android Auto
+      surface. It's signed with the project's own release key and distributed as an APK — there's no Play
+      listing, so your phone will ask you to allow installs from this source.</p>
+<pre><span class="c"># download to your phone, or push it over adb</span>
+adb install breeze-latest.apk
+
+<span class="c"># verify what you downloaded first (recommended):</span>
+sha256sum -c breeze-latest.apk.sha256</pre>
+    <p class="dim"><a href="/android/breeze-latest.apk"><b>⬇ breeze-latest.apk</b></a> ·
+      <a href="/android/breeze-latest.apk.sha256">sha256</a> ·
+      <a href="/android/">all versions</a> — or grab it from
+      <a href="https://github.com/monikapurpl3/breeze/releases">GitHub releases</a>.</p>
+    <div class="note"><b>App and server version independently.</b> The app talks to any server version and
+      feature-detects what it can use; you don't have to upgrade both together. It needs a Breeze Core
+      server on your network — pair once with the server's API key and an admin approval on the LAN.</div>
+  </section>
+
   <section id="after" style="--c:var(--after)">
     <h2>After installing</h2>
     <span class="who">three steps on every platform — then find your init system below</span>
@@ -386,6 +417,8 @@ Restart-Service BreezeCore
     <a href="/alpine/breeze-core@bolero.rsa.pub">RSA</a> (apk) ·
     <a href="/freebsd/breeze-freebsd-repo.rsa.pub">RSA</a> (FreeBSD pkg) ·
     <a href="/openwrt/breeze-core-usign.pub">usign</a> (OpenWrt)<br>
+    <b>Android:</b> <a href="/android/breeze-latest.apk">breeze-latest.apk</a> ·
+    <a href="/android/">all versions</a><br>
     <b>Source:</b> <a href="/src/">source tarballs</a> — for OpenBSD, mips, and any from-source install ·
     <b>Other distros</b> (Void, Gentoo, Slackware, NixOS…) → tarballs, ebuild, PKGBUILD, xbps template and a
     Nix flake on <a href="https://github.com/monikapurpl3/breeze-core/blob/main/docs/PACKAGES.md">GitHub</a><br>

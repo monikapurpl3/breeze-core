@@ -61,4 +61,24 @@ cp "$NETBSD_PKG" "$OUT/netbsd/All/breeze-core-${VER}.tgz"
 cp "$NETBSD_SUMMARY" "$OUT/netbsd/All/pkg_summary.gz"
 echo "  $(ls "$OUT/netbsd/All" | tr '\n' ' ')"
 
+echo "=== Android app (optional) ==="
+# The APK is built from the *breeze* repo, not this one, so it's staged from a
+# path given at call time. It lives here rather than being copied straight into
+# the published tree because build-repo.sh wipes $OUT on every run — anything
+# dropped in by hand would silently disappear on the next rebuild.
+#   ANDROID_APK=/path/to/Breeze-2.1.2.apk ./packaging/repo/build-bsd-repo.sh
+if [ -n "${ANDROID_APK:-}" ] && [ -f "$ANDROID_APK" ]; then
+  mkdir -p "$OUT/android"
+  base="$(basename "$ANDROID_APK")"
+  cp "$ANDROID_APK" "$OUT/android/$base"
+  # A stable name so the landing page can link to "latest" without editing.
+  cp "$ANDROID_APK" "$OUT/android/breeze-latest.apk"
+  ( cd "$OUT/android" && sha256sum breeze-latest.apk > breeze-latest.apk.sha256 \
+      && sha256sum "$base" > "$base.sha256" )
+  chmod 644 "$OUT/android"/*
+  echo "  $base + breeze-latest.apk (+ sha256)"
+else
+  echo "  (no ANDROID_APK given — skipping)"
+fi
+
 echo "BSD repos assembled for v$VER under $OUT/{freebsd,netbsd}"
