@@ -16,6 +16,10 @@ You need real Midea units (and `setup_device.py` to pair them) to exercise devic
 
 ## Before you open a PR
 
+- **Run the tests:** `python -m pytest tests/ -q` (28 tests, no hardware needed —
+  `msmart` is stubbed). Install them first with
+  `pip install -r requirements.txt -r requirements-dev.txt`; `pytest-asyncio` is
+  required, and without it the async tests fail rather than skip.
 - **Byte-compile:** `python -m compileall meow_ac setup_device.py` (CI does this).
 - **Import check:** `AC_CONFIG=/tmp/x.json python -c "import meow_ac.app"` should succeed.
 - If you touched the API, run the diagnostic CLI against a running instance: `./tools/ac-diag.zsh --base-url http://127.0.0.1:8420 --config ./config.json --auto`.

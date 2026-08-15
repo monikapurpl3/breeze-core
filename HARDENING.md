@@ -51,6 +51,7 @@ Environment=AC_TRUSTED_HOSTS=breeze.example.com,127.0.0.1,localhost
 Environment=AC_ENROLL_LAN_ONLY=1              # approvals only from a private/LAN address (default)
 Environment=AC_TOKEN_TTL_DAYS=90              # device tokens expire; lower = tighter
 # AC_MIN_AUTH_VERSION=2                        # once clients are on v2, refuse legacy v1 (426)
+# AC_AUTH_SKEW_SECONDS=60                      # v2 timestamp window; wider = larger replay window
 # leave AC_DOCS unset so docs stay disabled
 ExecStart=… uvicorn meow_ac.app:app --host 127.0.0.1 --port 8420 --proxy-headers --forwarded-allow-ips 127.0.0.1
 ```
@@ -172,7 +173,7 @@ Residual, by design: a **stolen v1 bearer token** is valid until it expires or i
 
 ## 6. Go-live checklist
 
-- [ ] VPN considered and consciously rejected (§0)
+- [ ] VPN considered and consciously rejected (see the note at the top)
 - [ ] App bound to `127.0.0.1`, `--proxy-headers --forwarded-allow-ips 127.0.0.1`
 - [ ] Reverse proxy with valid TLS (Let's Encrypt), HTTP→HTTPS redirect, server tokens off
 - [ ] Proxy **overwrites** `X-Forwarded-For` with the real peer (not append)
@@ -252,7 +253,7 @@ Windows is its own non-systemd case with a complete runbook in
 [docs/WINDOWS.md](docs/WINDOWS.md); the mapping to this document:
 
 - **Privilege drop** — the `BreezeCore` service runs as `LOCAL SERVICE`; state in `%ProgramData%\breeze-core` has inheritance stripped and is granted only to SYSTEM/Administrators/LocalService (the `chmod 600`/`750` analogue).
-- **TLS + headers + XFF overwrite (§2, §8)** — the bundled **Caddy** wizard does auto-HTTPS + HSTS/headers. Caddy needs *no* explicit XFF rule: with no `trusted_proxies` configured it drops a client-sent `X-Forwarded-For` and substitutes the real peer (verified), which *is* the overwrite. Never add public ranges to `trusted_proxies`.
+- **TLS + headers + XFF overwrite (§2)** — the bundled **Caddy** wizard does auto-HTTPS + HSTS/headers. Caddy needs *no* explicit XFF rule: with no `trusted_proxies` configured it drops a client-sent `X-Forwarded-For` and substitutes the real peer (verified), which *is* the overwrite. Never add public ranges to `trusted_proxies`.
 - **fail2ban (§3)** — the `BreezeTripwire` watcher tails Caddy's access log and bans IPs via Windows Firewall (general 4xx/5xx flood + instant admin-`403` tripwire; LAN never banned; bans expire). It must manage the firewall, so it — and only it — runs as LocalSystem.
 - **Egress lockdown (§4 item 10)** — the weak spot. Windows Firewall can't cleanly default-deny per-app egress; `install-service.ps1 -LockEgress` adds a best-effort "block this binary to `Internet`" rule, but classification is profile-dependent. For strict egress, run the container image or a systemd Linux host instead.
 - **Syscall filter / seccomp** — no equivalent; use the container image if you need it.

@@ -63,9 +63,15 @@ python setup_device.py --no-prompt --out ./config.json
 
 # Syntax-check the package without installing deps (msmart-ng not needed to compile)
 python -m py_compile setup_device.py meow_ac/*.py meow_ac/**/*.py
+
+# Run the test suite (no hardware needed; msmart is stubbed)
+python -m venv .venv && .venv/bin/pip install -r requirements.txt -r requirements-dev.txt
+.venv/bin/python -m pytest tests/ -q          # 28 passed
 ```
 
-The diagnostic tool's `--auto` mode doubles as the closest thing to a test suite: it verifies connectivity, auth (rejects no-key/wrong-key, accepts correct), unit-count parity between API and config, per-unit state validity, and enum value sanity. There is no way to run any of this without live hardware or a mock server standing in for the API.
+There **is** a pytest suite (`tests/`, 28 tests): auth v2 signing/skew/replay, the v1→v2 upgrade path, scan + beep, the service check, and the v3 API extras. It needs no hardware — `msmart` is stubbed — but it does need `pytest-asyncio`, without which the async tests *fail* rather than skip. Deps live in `requirements-dev.txt` and `asyncio_mode = auto` in `pytest.ini`.
+
+The diagnostic tool's `--auto` mode covers what the unit tests can't: it verifies connectivity, auth (rejects no-key/wrong-key, accepts correct), unit-count parity between API and config, per-unit state validity, and enum value sanity — against a live server with real units.
 
 ## Conventions and gotchas specific to this repo
 

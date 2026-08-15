@@ -22,7 +22,10 @@ installs *and updates* flow through your normal package manager
 (`apt upgrade`, `dnf upgrade`, `pacman -Syu`, `apk upgrade`). Copy-paste
 setup for each family is on the [repo landing
 page](https://bolero.salataputarica.hr.eu.org); the same commands are
-summarized in the README's Get started. Integrity model: the repo is built
+summarized in the README's Get started. The same host also carries the
+[Windows installer](https://bolero.salataputarica.hr.eu.org/windows/) with
+its winget manifests, and the [Android app](https://bolero.salataputarica.hr.eu.org/android/).
+Integrity model: the repo is built
 and signed offline (apt `InRelease`, signed rpms + `repo_gpgcheck`, pacman
 `SigLevel = Required`, RSA-signed `APKINDEX`) — the web host serves static
 files only and holds no keys.
@@ -51,7 +54,7 @@ tokens) unless you delete it yourself.
 | Debian, Ubuntu, Mint, Pop!_OS, Raspberry Pi OS, Armbian, Devuan | `breeze-core_<v>_amd64.deb` (or `_arm64`) | `sudo apt install ./breeze-core_<v>_amd64.deb` |
 | Fedora, RHEL, AlmaLinux, Rocky, openSUSE Leap/Tumbleweed, SLE | `breeze-core-<v>-1.x86_64.rpm` (or `.aarch64`) | `sudo dnf install ./breeze-core-<v>-1.x86_64.rpm` / `sudo zypper in --allow-unsigned-rpm ./…` |
 | Arch, Manjaro, Artix | `breeze-core-<v>-1-x86_64.pkg.tar.zst` | `sudo pacman -U breeze-core-<v>-1-x86_64.pkg.tar.zst` |
-| Alpine | `breeze-core_<v>_x86_64.apk` (or `_aarch64`) | `sudo apk add --allow-untrusted ./breeze-core_<v>_x86_64.apk` |
+| Alpine | `breeze-core_<v>_x86_64.apk` (or `_aarch64`, `_riscv64`) | `sudo apk add --allow-untrusted ./breeze-core_<v>_x86_64.apk` |
 | OpenWrt (x86_64 / aarch64, ~65 MB free) | signed **opkg feed** on the repo | see [OpenWrt](#openwrt) below |
 | Void, Gentoo, Slackware, anything else | `breeze-core-<v>-linux-<glibc\|musl>-<amd64\|arm64>.tar.gz` | unpack, then `sudo ./install.sh` |
 | Windows | `Breeze-Core-Setup.exe` (also on the repo host under `/windows/`) | double-click, or `winget install --manifest` — see [WINDOWS.md](WINDOWS.md#2-install--the-guided-installer-recommended) |
@@ -63,6 +66,18 @@ Void-musl. `amd64` = regular PCs, `arm64` = Raspberry Pi 3+/ARM boards. The
 generic `install.sh` detects systemd, OpenRC, or runit and installs the
 matching service; on anything else it prints what to wire up (templates in
 [`deploy/init/`](../deploy/init/)).
+
+**RISC-V (`riscv64`)** ships as a **musl** bundle only — Alpine and Void-musl.
+There's no glibc riscv64 build yet. It's also the slowest thing in the build:
+riscv64 has no prebuilt Python wheels, so every dependency (including the Rust
+extension behind pydantic) compiles from source under emulation.
+
+**Some platforms can lag a release.** Linux `amd64`/`arm64` are built and
+signed for every release, so they're always current. The BSDs, OpenWrt and
+riscv64 can't be: BSD packages have to be produced on a real FreeBSD/NetBSD
+machine (their `pkg`/`pkg_create` tooling doesn't exist on Linux), and OpenWrt
+and riscv64 are cross-built or emulated. If one is behind and you need the
+newest, the source tarball always matches the current release.
 
 Every one of these is exercised in CI on real distro userlands
 (Debian/Ubuntu/Mint/Devuan/Leap/Tumbleweed/SLE/Alma/Arch/Manjaro/Artix/

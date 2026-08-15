@@ -9,6 +9,7 @@ environment variables, how authentication works, and every REST endpoint.
 [Configuration](#configuration) ·
 [Environment variables](#runtime-settings-environment-variables) ·
 [Authentication](#authentication-device-pairing) ·
+[Auth failures](#why-an-auth-failure-happened--the-401-body) ·
 [REST API](#rest-api-reference) ·
 [Control / state schema](#control--state-schema)
 
@@ -57,6 +58,7 @@ headers on, LAN-only approval).
 | `AC_MIN_AUTH_VERSION` | `1` | minimum device auth-version accepted (see [Authentication](#authentication-device-pairing)). `1` = accept legacy bearer **and** Ed25519 v2; `2` = refuse v1 with 426 |
 | `AC_HISTORY_SIZE` | `720` | per-unit in-memory history samples kept for `/history` and `/metrics` (~1h at the app's 5s poll) |
 | `AC_STREAM_TICK` | `5` | how often the SSE broadcaster (`/api/units/stream`) polls the units while ≥1 client is connected (seconds) |
+| `AC_AUTH_SKEW_SECONDS` | `60` | how far a v2 signed request's timestamp may be from server time, either way. Raising it widens the replay window; the nonce cache is sized from it. Only raise if clients genuinely can't keep time |
 
 > Point them at your chosen config dir, e.g.
 > `AC_CONFIG=/etc/breeze-core/config.json` — `AC_DEVICES`/`AC_PROGRAMS` then
@@ -146,6 +148,36 @@ update.
 > The bundled web UI and the diagnostic CLIs remain **v1 clients** for now;
 > they keep working while `AC_MIN_AUTH_VERSION=1` (the default). Migrate them
 > before raising the clamp to `2`.
+
+### Why an auth failure happened — the 401 body
+
+Every rejection carries a machine-readable reason, because "401" alone can't
+tell a client whether to fix the request or throw its credential away. Getting
+that wrong is expensive: an app that re-pairs on *any* 401 will discard a
+perfectly good key the moment a phone's clock drifts, and then need an admin on
+the LAN to approve it again.
+
+```json
+{"detail": {"error": "unauthorized", "detail": "Request timestamp outside the allowed window",
+            "reason": "clock_skew", "retryable": true,
+            "server_time": 1755284412.51, "client_time": 1755284100.0,
+            "max_skew_seconds": 60}}
+```
+
+| `reason` | `retryable` | What the client should do |
+|---|---|---|
+| `no_credential` | no | nothing was presented — enrol |
+| `unknown_key` | no | the server has never heard of this key id (revoked, or a wiped `devices.json`) — re-enrol |
+| `expired` | no | past `AC_TOKEN_TTL_DAYS` — re-enrol |
+| `bad_signature` | no | the signature doesn't verify for this key — re-enrol |
+| `bad_api_key` | no | the shared enrollment key is wrong — fix the key, don't touch the device credential |
+| `clock_skew` | **yes** | the credential is fine; the timestamp isn't. `server_time` is included so the client can learn its offset and retry — the Breeze app does exactly this |
+| `replay` | **yes** | this nonce was already used; sign a new request |
+| `incomplete_signature` | **yes** | a required signing header was missing or malformed |
+
+**Retryable reasons must not cost you your credential.** Both retryable and
+definitive failures are logged server-side with the reason, the client IP, and
+a key hint (never the secret) — `journalctl -u breeze-core -t meow-ac.auth`.
 
 ---
 

@@ -27,7 +27,7 @@ Four decoupled components that share exactly one contract — the `/api/*` endpo
 | **Web UI** | `static/` | Self-contained vanilla-JS control panel, served by the app. Just an API client. |
 | **Diagnostic CLI** | `tools/ac-diag.zsh` | HTTP-only health/latency/security checker. |
 | **Approval CLI** | `tools/ac-approve.zsh` | Admin tool to approve device pairings and manage tokens (LAN-only). |
-| **Breeze (Android)** | [separate repo](https://github.com/monikapurpl3/breeze) | Optional native app — one-unit-per-screen swipe control with modern sliders/switches, scan-to-add, programs, diagnostics, server switching, home-screen widgets. |
+| **Breeze (Android)** | [separate repo](https://github.com/monikapurpl3/breeze) | Optional native app — one-unit-per-screen swipe control with modern sliders/switches, scan-to-add, programs, diagnostics, server switching, home-screen widgets, and an **Android Auto** screen. APK on the [releases page](https://github.com/monikapurpl3/breeze/releases) or the [package host](https://bolero.salataputarica.hr.eu.org/android/). |
 
 Delete any client and the API and the others keep working. Built on
 [msmart-ng](https://github.com/mill1000/midea-msmart), [FastAPI](https://fastapi.tiangolo.com/) +

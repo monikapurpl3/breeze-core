@@ -84,9 +84,35 @@ sudo systemctl restart breeze-core
 
 ### Every request gets 401
 
-The per-device token is missing or expired (separate from the API key).
-Re-pair the device — the web UI and app do this automatically on a 401. Tune
-lifetime with `AC_TOKEN_TTL_DAYS`.
+**Read the `reason` in the body before re-pairing.** A 401 does not
+automatically mean the credential is dead, and treating it that way is how a
+fleet of clients ends up unpaired at once:
+
+```bash
+curl -sS -H "X-API-Key: $KEY" http://SERVER:8420/api/units | jq .detail
+```
+
+- `reason: "clock_skew"`, `"replay"` or `"incomplete_signature"` →
+  **`retryable: true`**. The credential is fine, only this request was wrong.
+  For skew the body carries `server_time`, so a client can learn its offset and
+  retry (the Breeze app does). Check the client's clock — a phone or VM that
+  drifted more than `AC_AUTH_SKEW_SECONDS` (default 60) is the usual cause.
+- `reason: "expired"`, `"unknown_key"`, `"bad_signature"`, `"no_credential"` →
+  the device really does need to re-enrol. Expiry is governed by
+  `AC_TOKEN_TTL_DAYS` (default 90; `0` = never).
+- `reason: "bad_api_key"` → the shared enrollment key is wrong. Fix the key;
+  the device credential is not the problem.
+
+The full table is in [API.md](API.md#why-an-auth-failure-happened--the-401-body).
+Server side, every rejection is logged with its reason, the client IP and a key
+hint: `journalctl -u breeze-core -t meow-ac.auth`.
+
+> **Everyone lost their servers at once?** That's the signature of two things
+> compounding: a client that discards its credential on *any* 401, and
+> fail2ban banning a **shared** NAT address so every device behind it fails
+> together. Both are fixed in current versions — see the `ignoreip` guidance in
+> [HARDENING.md](../HARDENING.md#3-fail2ban) — but an old client build can
+> still do the first half to itself.
 
 ### Approving from the LAN still gives 403 ("admin action must come from the LAN")
 

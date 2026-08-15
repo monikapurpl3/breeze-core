@@ -1,0 +1,12 @@
+# Test-only dependencies. The suite under tests/ needs these on top of
+# requirements.txt; they are deliberately not in the runtime requirements so
+# the shipped bundles don't carry a test framework.
+#
+#   python -m pip install -r requirements.txt -r requirements-dev.txt
+#   python -m pytest tests/ -q
+#
+# pytest-asyncio is not optional: several tests drive async code directly
+# (asyncio_mode=auto in pytest.ini), and without it they don't merely skip —
+# they fail with "async def functions are not natively supported".
+pytest>=8.0
+pytest-asyncio>=0.23
