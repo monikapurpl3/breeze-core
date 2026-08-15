@@ -49,8 +49,39 @@ elevated (Administrator) steps from **PowerShell**.
 ## 2. Install — the guided installer (recommended)
 
 1. Download **`Breeze-Core-Setup.exe`** from the
-   [latest release](https://github.com/monikapurpl3/breeze-core/releases) and run it
-   (it asks for elevation).
+   [latest release](https://github.com/monikapurpl3/breeze-core/releases) — or from
+   the package host,
+   [bolero.salataputarica.hr.eu.org/windows/](https://bolero.salataputarica.hr.eu.org/windows/),
+   which publishes a `.sha256` next to each build — and run it (it asks for
+   elevation).
+
+   <details><summary><b>Or install it with winget</b></summary>
+
+   Breeze Core isn't in the public [winget-pkgs](https://github.com/microsoft/winget-pkgs)
+   repository (yet), so this goes through a manifest — which Windows gates behind an
+   admin setting. In an **elevated** PowerShell, once:
+
+   ```powershell
+   winget settings --enable LocalManifestFiles
+   ```
+
+   Then, as yourself:
+
+   ```powershell
+   mkdir breeze-core-3.0.2; cd breeze-core-3.0.2
+   'Breeze.BreezeCore.yaml','Breeze.BreezeCore.installer.yaml','Breeze.BreezeCore.locale.en-US.yaml' |
+     % { iwr "https://bolero.salataputarica.hr.eu.org/winget/3.0.2/$_" -OutFile $_ }
+   winget install --manifest .
+   ```
+
+   winget downloads the installer from the GitHub release and verifies it against
+   the SHA256 in the manifest. The manifests live in `packaging/winget/<version>/`;
+   `InstallerType: nullsoft` is what tells winget the silent switch is `/S`.
+
+   A private winget *source* (`winget source add`) isn't possible against bolero —
+   winget sources are a REST API, and bolero serves static files only.
+
+   </details>
 2. On the **Components** page:
    - **Breeze Core server (Windows service)** — required. Copies the app, builds
      the venv, installs dependencies, and registers the hardened `BreezeCore`
@@ -248,13 +279,22 @@ powershell -ExecutionPolicy Bypass -File .\install-service.ps1 -Action Uninstall
 ## 9. Build the installer yourself
 
 Requires [NSIS](https://nsis.sourceforge.io/) (`makensis`) and internet (for the
-bundled NSSM). From `deploy\windows`:
+bundled NSSM). From the repo root:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\fetch-vendor.ps1        # -> vendor\nssm.exe
-& "C:\Program Files (x86)\NSIS\makensis.exe" /DVERSION=2.3.0 breeze-core-setup.nsi
-# -> Breeze-Core-Setup.exe
+powershell -ExecutionPolicy Bypass -File .\deploy\windows\fetch-vendor.ps1   # -> vendor\nssm.exe
+.\deploy\windows\build-installer.ps1                                        # -> Breeze-Core-Setup.exe
 ```
+
+`build-installer.ps1` reads the version from `meow_ac/__init__.py` and passes it
+to `makensis`, so the installer can't claim a version the package doesn't have.
+Pass `-OutDir <dir>` to also drop a versioned copy (`Breeze-Core-Setup-<v>.exe`)
+somewhere; it prints the SHA256 either way.
+
+**This is the one release artifact CI can't produce** — `makensis` needs
+Windows. Build it on a Windows box at release time and attach it to the tag;
+`packaging/repo/build-bsd-repo.sh` stages it for the package host from
+`WINDOWS_EXE=<path>`, the same way the Android APK is staged.
 
 `vendor\` and build output are git-ignored — no binaries are committed.
 
