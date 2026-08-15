@@ -314,14 +314,22 @@ Get-FileHash .\Breeze-Core-Setup.exe -Algorithm SHA256</pre>
     <p class="dim"><a href="/windows/Breeze-Core-Setup.exe"><b>⬇ Breeze-Core-Setup.exe</b></a> ·
       <a href="/windows/Breeze-Core-Setup.exe.sha256">sha256</a> ·
       <a href="/windows/">all versions</a></p>
-    <div class="note"><b>winget:</b> manifests for <code>Breeze.BreezeCore</code> are published under
-      <a href="/winget/">/winget/</a>. Until the package is accepted into the public
-      <a href="https://github.com/microsoft/winget-pkgs">winget-pkgs</a> repository you can install straight
-      from a manifest:
-<pre style="margin-top:8px"><span class="c"># download the three YAML files from /winget/&lt;version&gt;/ into a folder, then:</span>
-winget install --manifest .reeze-core-@VERSION@\</pre>
-      A private winget <i>source</i> isn't possible here — winget sources speak a REST API, and this host
-      deliberately serves static files only.</div>
+    <div class="note"><b>winget:</b> manifests for <code>Breeze.BreezeCore</code> live under
+      <a href="/winget/">/winget/</a>. The package isn't in the public
+      <a href="https://github.com/microsoft/winget-pkgs">winget-pkgs</a> repository yet, so install it from
+      the manifest — which Windows gates behind an admin setting:
+<pre style="margin-top:8px"><span class="c"># once, in an ADMIN PowerShell — winget refuses local manifests otherwise:</span>
+winget settings --enable LocalManifestFiles
+
+<span class="c"># then, as yourself:</span>
+mkdir breeze-core-@VERSION@; cd breeze-core-@VERSION@
+'Breeze.BreezeCore.yaml','Breeze.BreezeCore.installer.yaml','Breeze.BreezeCore.locale.en-US.yaml' |
+  % { iwr "https://bolero.salataputarica.hr.eu.org/winget/@VERSION@/$_" -OutFile $_ }
+winget install --manifest .</pre>
+      winget then downloads the installer from GitHub and checks it against the SHA256 in the manifest.
+      A private winget <i>source</i> isn't an option here — sources speak a REST API, and this host
+      deliberately serves static files only.
+    </div>
   </section>
 
   <section id="android" style="--c:var(--droid)">
