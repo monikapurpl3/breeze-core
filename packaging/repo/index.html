@@ -206,7 +206,7 @@ sudo pacman -Sy breeze-core</pre>
 
   <section id="alpine" style="--c:var(--alpine)">
     <h2>Alpine</h2>
-    <span class="who">Alpine Linux — <code>apk</code> · run as root (Alpine ships <code>doas</code>, not <code>sudo</code>)</span>
+    <span class="who">Alpine Linux — <code>apk</code> · x86_64 · aarch64 · <b>riscv64</b> · run as root (Alpine ships <code>doas</code>, not <code>sudo</code>)</span>
 <pre><span class="c"># as root — prefix with `doas` if you use it</span>
 apk add --no-cache curl
 curl -fsSL -o /etc/apk/keys/breeze-core@bolero.rsa.pub \
@@ -237,11 +237,13 @@ opkg update &amp;&amp; opkg install breeze-core</pre>
       Even past that, a typical mips router has 8–16 MB of flash, which loses to a 24 MB download before
       you even reach the 51 MB installed. A small x86/ARM64 box beside the router beats fighting the flash;
       or build from source with the <a href="/src/">source tarball</a> if the device has real storage.</div>
-    <div class="note"><b>RISC-V:</b> unlike mips, <code>riscv64</code> is genuinely buildable and is being
-      added — as a <b>musl</b> build (Alpine, Void-musl). Expect it to land <b>last of any architecture</b>,
-      and to lag the version above: riscv64 has no prebuilt wheels on PyPI, so every dependency compiles
-      from source — including pydantic-core's Rust and PyInstaller's own bootloader — entirely under QEMU
-      emulation. It is by far the slowest target we build.<br><br>
+    <div class="note"><b>RISC-V is here.</b> <code>riscv64</code> ships as a <b>musl</b> build — install it
+      from the <a href="#alpine">Alpine</a> section above, same as any other arch. Expect it to land
+      <b>last of any architecture</b> on future releases and to lag the version at the top of this page:
+      riscv64 has no prebuilt wheels on PyPI, so every dependency compiles from source — pydantic-core's
+      Rust and PyInstaller's own bootloader included — entirely under QEMU emulation. This one took over
+      two hours. There is no OpenWrt riscv64 <code>.ipk</code>: that bundle is built on a newer Alpine than
+      OpenWrt 23.05's musl floor allows.<br><br>
       <b>There will be no glibc/riscv64 build</b> for now. The glibc bundle is built on AlmaLinux 8 on
       purpose — its glibc 2.28 is the floor that lets one binary run on everything from RHEL 8 upwards —
       and AlmaLinux publishes no riscv64 image. Switching to a base that does would set a *newer* glibc
