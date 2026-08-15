@@ -5,6 +5,11 @@ web control panel, and a diagnostic CLI, plus an optional native Android app
 (**Breeze**). After a one-time local pairing there is **no cloud dependency**:
 your units are controlled directly over your own network.
 
+It's **batteries-included** — panel, app, widgets, Android Auto, server-side
+schedules, diagnostics, native packages and a signed repo all ship with it —
+and there's [a straight comparison](#compared-to-the-nethome-plus-app) with the
+vendor's *NetHome Plus* app below, drawbacks included.
+
 ![Breeze Core web UI — dashboard](docs/img/web-ui.png)
 
 <sub>The web control panel — a live card per unit, six switchable colour
@@ -32,6 +37,79 @@ Delete any client and the API and the others keep working. Built on
 > `meow_ac` (so the ASGI entry point is `meow_ac.app:app`). Install paths and
 > service names are your choice — the docs use `/etc/breeze-core` etc., wired
 > via environment variables.
+
+---
+
+## Batteries included
+
+One install and you're done — there is nothing else to buy, subscribe to, or
+bolt on:
+
+| | |
+|---|---|
+| **Ways to control it** | Web panel in any browser · native **Android app** · **home-screen widgets** (power / temp ± without opening anything) · **Android Auto** · REST API · CLI |
+| **Automation, server-side** | Favourites, schedules, and **temperature curves** that run on the server — they fire whether or not your phone is on, charged, or home |
+| **Live state** | **SSE push**: changes (yours, a schedule's, another client's) arrive without polling |
+| **Operations** | Native packages for **deb · rpm · pacman · apk · OpenWrt · FreeBSD · NetBSD**, a Windows installer, a Docker image, and a **signed repo** so updates come through your package manager |
+| **When something's off** | A real diagnostic battery — `breeze-core diag --auto`, mirrored inside the app: auth posture, per-unit latency, capability probing, input validation |
+| **Security, from the start** | Two-credential access with **Ed25519 request signing**, LAN-gated admin approval, rate limiting, strict CSP + security headers, and a full go-live runbook in [HARDENING.md](HARDENING.md) |
+| **Observability** | Prometheus `/metrics` and a state-history buffer |
+
+No account, no telemetry, no cloud callbacks after pairing, no ads, no build
+step, and no "pro" tier — it's [AGPL-3.0](LICENSE) and the source is right here.
+
+---
+
+## Compared to the *NetHome Plus* app
+
+You'll still use the vendor app once, to put the units on Wi-Fi. After that:
+
+| | NetHome Plus | Breeze Core + Breeze |
+|---|---|---|
+| **Where a command goes** | phone → the internet → Midea's cloud → back down to the AC three metres away | phone → your server → the AC, over your own LAN |
+| **Internet down** | nothing works | everything works |
+| **What it feels like** | you wait for the cloud round-trip on top of the unit's own response time | the UI moves the instant you touch it (optimistic + SSE), so the unit's own latency is the only real cost |
+| **Account** | required, with whatever it logs | none — no sign-up, no e-mail, no ToS |
+| **Sharing with the household** | pass the account password around | one credential per device, each **individually revocable**, each approved by an admin on the LAN |
+| **Automation** | what the app happens to offer | documented REST API + SSE + Prometheus, plus server-side schedules and temperature curves |
+| **Where you can control it from** | the phone app | phone, widget, car, browser, terminal, `curl`, cron |
+| **Beeping** | every command chirps | beep is **off** unless you ask for it — change the setpoint at 3 a.m. without waking anyone |
+| **Multiple units** | one at a time | swipe between them; one screen each |
+| **Updates** | pushed at you; features can vanish | you choose when; a version that works keeps working |
+| **The AC's internet access** | needed | you can **firewall the units off the internet entirely** once paired ([HARDENING.md](HARDENING.md)) — no more phoning home |
+| **If the vendor sunsets it** | you're stuck | nothing to sunset; it's your machine and your source |
+
+**A word on "faster".** The slow part isn't the network — it's the AC's own
+firmware. On the maintainer's units `breeze-core diag` measures roughly
+**0.7 s** for a full state query over the LAN, and no client can beat that.
+What self-hosting removes is everything *stacked on top* of it: the WAN hop,
+the cloud queue, an app cold-start, and outages you can't do anything about.
+
+### The honest drawbacks
+
+- **You need a machine that's always on**, and you're now its sysadmin —
+  updates, and a copy of `config.json` + `devices.json` somewhere safe.
+- **Pairing isn't fully local.** The units get on Wi-Fi via the vendor app, and
+  V3 units need **one internet-connected discovery run**: msmart-ng fetches
+  each unit's token/key through the NetHome Plus cloud. Everything after that
+  is offline — keep those credentials backed up.
+- **Nothing is exposed to the internet by default.** Away-from-home control
+  means a **VPN** (recommended) or a reverse proxy you secure yourself.
+- **The feature ceiling is your firmware's.** Only what
+  [msmart-ng](https://github.com/mill1000/midea-msmart) and your model support:
+  some units silently ignore horizontal swing, and there's no filter reset, no
+  firmware updates, no energy dashboard.
+- **The native app is Android-only.** iOS and desktop get the web panel, which
+  is good, but it isn't an app.
+- **It's sized for a home** — one worker, one scheduler. Handfuls of units, not
+  a building.
+- **If the server is down, the app is down.** (Your IR remote never stopped
+  working.)
+- **No voice assistants out of the box.** No Alexa/Google skill; you'd bridge
+  it yourself through the API.
+- **Give the units static DHCP leases**, or they'll wander to new addresses.
+- **It isn't a home-automation platform.** One brand, one job, no ecosystem —
+  if you already run Home Assistant, its Midea integration may fit you better.
 
 ---
 
