@@ -18,11 +18,16 @@ TARGETS=("${@:-${ALL[@]}}")
 # but Alpine published no riscv64 image before 3.20 — so riscv64 (and only
 # riscv64) builds on 3.20. Its musl is 1.2.5, i.e. that bundle targets
 # Alpine/Void-musl riscv64, not OpenWrt.
-# riscv64 needs 3.22, not merely "3.20+, the first with a riscv64 image":
-# pydantic-core's Cargo.toml is edition 2024, so cargo must be >= 1.85, and
-# Alpine ships rust 1.78 on 3.20 and 1.83 on 3.21 — both fail with
-# "failed to parse manifest ... Cargo.toml". 3.22 has rust 1.87.
-alpine_tag_for() { case "$1" in musl-riscv64) echo 3.22 ;; *) echo 3.19 ;; esac; }
+# riscv64 needs alpine:edge, and the reason is entirely about rustc:
+#   3.19  no riscv64 image at all
+#   3.20  rust 1.78 ─┐ pydantic-core's Cargo.toml is edition 2024, so cargo
+#   3.21  rust 1.83 ─┘ must be >= 1.85: "failed to parse manifest"
+#   3.22  rust 1.87   parses, then dies — pydantic-core 2.46.4 and jiter 0.14
+#                     declare rust-version 1.88. Short by one minor version.
+#   edge  rust 1.97   builds.
+# edge is a rolling branch, so this target is deliberately the least
+# reproducible of the set; revisit when a stable Alpine ships rustc >= 1.88.
+alpine_tag_for() { case "$1" in musl-riscv64) echo edge ;; *) echo 3.19 ;; esac; }
 
 # riscv64 has no musllinux wheels, so its bundle compiles pydantic-core (Rust)
 # and friends from source under QEMU — it needs a toolchain in the image, and
