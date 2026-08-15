@@ -39,14 +39,29 @@ COPY requirements.txt .
 # path by orders of magnitude. Give cargo/make all the host's threads and drop
 # debug info we'd only strip later.
 ARG BUILD_JOBS=4
+# CARGO_TARGET_DIR is pinned to a fixed path so it can be cache-mounted below:
+# pip unpacks each sdist into a randomly-named /tmp directory, so cargo's
+# default (<srcdir>/target) is a new path every run and nothing is ever reused.
 ENV CARGO_BUILD_JOBS=${BUILD_JOBS} \
     MAKEFLAGS=-j${BUILD_JOBS} \
     RUSTFLAGS="-C debuginfo=0" \
     CARGO_NET_RETRY=5 \
-    PIP_NO_CACHE_DIR=1
-RUN python3 -m venv /venv \
-    && /venv/bin/pip install --no-cache-dir --upgrade pip \
-    && /venv/bin/pip install --no-cache-dir -r requirements.txt pyinstaller
+    CARGO_TARGET_DIR=/cargo-target
+# BuildKit cache mounts, NOT image layers — they survive between builds and add
+# nothing to the final bundle, so `--no-cache-dir` (which was here before) is
+# both unnecessary and actively harmful: it threw away every compiled wheel.
+# This matters entirely for wheel-less architectures. On amd64/arm64 pip just
+# downloads binary wheels and none of it signifies; on riscv64 every dependency
+# is compiled, and the first successful build took over two hours — of which
+# the Rust compile of pydantic-core was the bulk. With these mounts a repeat
+# build reuses the wheels and cargo's artifacts instead of redoing all of it.
+RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
+    --mount=type=cache,target=/root/.cargo/registry,sharing=locked \
+    --mount=type=cache,target=/root/.cargo/git,sharing=locked \
+    --mount=type=cache,target=/cargo-target,sharing=locked \
+    python3 -m venv /venv \
+    && /venv/bin/pip install --upgrade pip \
+    && /venv/bin/pip install -r requirements.txt pyinstaller
 
 COPY meow_ac ./meow_ac
 COPY static ./static
