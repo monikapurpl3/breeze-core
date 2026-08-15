@@ -20,6 +20,12 @@ TARGETS=("${@:-${ALL[@]}}")
 # Alpine/Void-musl riscv64, not OpenWrt.
 alpine_tag_for() { case "$1" in musl-riscv64) echo 3.20 ;; *) echo 3.19 ;; esac; }
 
+# riscv64 has no musllinux wheels, so its bundle compiles pydantic-core (Rust)
+# and friends from source under QEMU — it needs a toolchain in the image, and
+# every core it can get.
+toolchain_for()  { case "$1" in *-riscv64) echo 1 ;; *) echo 0 ;; esac; }
+JOBS="$(nproc 2>/dev/null || echo 4)"
+
 for t in "${TARGETS[@]}"; do
   libc="${t%-*}" arch="${t#*-}"
   echo "=== bundle $libc/$arch (commit $COMMIT) ==="
@@ -28,6 +34,10 @@ for t in "${TARGETS[@]}"; do
     -f "packaging/binary/Dockerfile.$libc" \
     --build-arg "AC_COMMIT=$COMMIT" \
     --build-arg "ALPINE_TAG=$(alpine_tag_for "$t")" \
+    --build-arg "WITH_TOOLCHAIN=$(toolchain_for "$t")" \
+    --build-arg "BUILD_JOBS=$JOBS" \
+    --cache-to "type=local,dest=$OUT/.buildcache/$t,mode=max" \
+    --cache-from "type=local,src=$OUT/.buildcache/$t" \
     -o "type=local,dest=$OUT/bundle-$t" \
     .
   # buildx exports the /breeze-core dir from the scratch stage. Check for a
