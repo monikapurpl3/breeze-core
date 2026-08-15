@@ -54,7 +54,7 @@ tokens) unless you delete it yourself.
 | Alpine | `breeze-core_<v>_x86_64.apk` (or `_aarch64`) | `sudo apk add --allow-untrusted ./breeze-core_<v>_x86_64.apk` |
 | OpenWrt (x86_64 / aarch64, ~65 MB free) | signed **opkg feed** on the repo | see [OpenWrt](#openwrt) below |
 | Void, Gentoo, Slackware, anything else | `breeze-core-<v>-linux-<glibc\|musl>-<amd64\|arm64>.tar.gz` | unpack, then `sudo ./install.sh` |
-| Windows | `Breeze-Core-Setup.exe` | double-click — see [WINDOWS.md](WINDOWS.md) |
+| Windows | `Breeze-Core-Setup.exe` (also on the repo host under `/windows/`) | double-click, or `winget install --manifest` — see [WINDOWS.md](WINDOWS.md#2-install--the-guided-installer-recommended) |
 | Docker / Podman | `ghcr.io/monikapurpl3/breeze-core` | see [DOCKER.md](DOCKER.md) |
 | NixOS / Nix | the repo's **flake** | see below |
 
