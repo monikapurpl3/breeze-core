@@ -3,13 +3,17 @@
 # Alpine 3.19 ON PURPOSE: its musl 1.2.4 is the floor for OpenWrt 23.05
 # (3.20's musl 1.2.5 links pwritev2, which 23.05 lacks). Newer musl systems
 # run older-musl binaries fine, so this one bundle covers them all.
-# Works for linux/amd64 and linux/arm64 (pick with --platform).
+# Works for linux/amd64, linux/arm64 and linux/riscv64 (pick with --platform).
+# riscv64 MUST override ALPINE_TAG to 3.20+ — Alpine publishes no riscv64 image
+# before 3.20. That bundle therefore carries musl 1.2.5 and is NOT
+# OpenWrt-23.05-safe, which is fine: riscv64 ships for Alpine / Void-musl.
 #
 #   docker buildx build --platform linux/amd64 -f packaging/binary/Dockerfile.musl \
 #     --build-arg AC_COMMIT=$(git rev-parse --short HEAD) \
 #     -o type=local,dest=packaging/out/bundle-musl-amd64 .
 
-FROM alpine:3.19 AS build
+ARG ALPINE_TAG=3.19
+FROM alpine:${ALPINE_TAG} AS build
 
 # binutils: PyInstaller needs objdump/objcopy to assemble the bundle.
 RUN apk add --no-cache python3 py3-pip binutils

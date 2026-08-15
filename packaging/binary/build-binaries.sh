@@ -11,8 +11,14 @@ cd "$(git rev-parse --show-toplevel)"
 COMMIT="$(git rev-parse --short HEAD)"
 OUT=packaging/out
 
-ALL=(glibc-amd64 glibc-arm64 musl-amd64 musl-arm64)
+ALL=(glibc-amd64 glibc-arm64 musl-amd64 musl-arm64 musl-riscv64)
 TARGETS=("${@:-${ALL[@]}}")
+
+# The musl bundle is pinned to Alpine 3.19 for OpenWrt 23.05's musl 1.2.4 floor,
+# but Alpine published no riscv64 image before 3.20 — so riscv64 (and only
+# riscv64) builds on 3.20. Its musl is 1.2.5, i.e. that bundle targets
+# Alpine/Void-musl riscv64, not OpenWrt.
+alpine_tag_for() { case "$1" in musl-riscv64) echo 3.20 ;; *) echo 3.19 ;; esac; }
 
 for t in "${TARGETS[@]}"; do
   libc="${t%-*}" arch="${t#*-}"
@@ -21,6 +27,7 @@ for t in "${TARGETS[@]}"; do
     --platform "linux/$arch" \
     -f "packaging/binary/Dockerfile.$libc" \
     --build-arg "AC_COMMIT=$COMMIT" \
+    --build-arg "ALPINE_TAG=$(alpine_tag_for "$t")" \
     -o "type=local,dest=$OUT/bundle-$t" \
     .
   # buildx exports the /breeze-core dir from the scratch stage. Check for a

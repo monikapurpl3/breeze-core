@@ -159,7 +159,15 @@ drun alpine:3.20 sh -c "
   VER='$VER'
   cp /work/packaging/out/pkg/breeze-core_\${VER}_x86_64.apk  \"\$W/x86_64/breeze-core-\${VER}.apk\"
   cp /work/packaging/out/pkg/breeze-core_\${VER}_aarch64.apk \"\$W/aarch64/breeze-core-\${VER}.apk\"
-  for a in x86_64 aarch64; do (
+  # riscv64 is optional: its bundle needs a newer Alpine base than the pinned
+  # 3.19 (see Dockerfile.musl), so a build without it must still publish.
+  ARCHES='x86_64 aarch64'
+  if [ -f /work/packaging/out/pkg/breeze-core_\${VER}_riscv64.apk ]; then
+    mkdir -p \"\$W/riscv64\"
+    cp /work/packaging/out/pkg/breeze-core_\${VER}_riscv64.apk \"\$W/riscv64/breeze-core-\${VER}.apk\"
+    ARCHES=\"\$ARCHES riscv64\"
+  fi
+  for a in \$ARCHES; do (
     cd \"\$W/\$a\"
     apk index --allow-untrusted --rewrite-arch \$a -o APKINDEX.tar.gz *.apk 2>/dev/null
     abuild-sign -k '/work/$KEYS/$APK_KEY_NAME.rsa' APKINDEX.tar.gz
