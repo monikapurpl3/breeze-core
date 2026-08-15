@@ -42,10 +42,24 @@ tar -C "$OUT" -cf - . | ssh "$HOST" "
   mkdir -p '$ROOT/releases/$TS'
   tar -xf - -C '$ROOT/releases/$TS'
   chmod -R u+rwX,go+rX '$ROOT/releases/$TS'
+  # tar restores the SOURCE directory's mtime onto the extracted release dir,
+  # so a freshly published release can look older than its predecessors. That
+  # bit once: the keep-3 prune below sorted the new release 4th and deleted it
+  # out from under the symlink, leaving 'current' dangling and the site 404ing.
+  touch '$ROOT/releases/$TS'
   ln -sfn 'releases/$TS' '$ROOT/current.new' && mv -Tf '$ROOT/current.new' '$ROOT/current'
-  cd '$ROOT/releases' && ls -1dt */ | tail -n +4 | xargs -r rm -rf
-  echo 'live releases:' && ls -1dt '$ROOT/releases'/*/ | head -3
-" || { echo "PUBLISH FAILED — 'current' left pointing at the previous release"; exit 1; }
+  # Prune by NAME, not mtime: the directories are timestamp-named, so a
+  # reverse sort is the reliable ordering and can't be perturbed by tar.
+  # Never delete whatever 'current' points at, belt and braces.
+  cd '$ROOT/releases'
+  keep=\"\$(basename \"\$(readlink '$ROOT/current')\")\"
+  ls -1d */ | sed 's#/\$##' | sort -r | tail -n +4 | while read -r d; do
+    [ \"\$d\" = \"\$keep\" ] || rm -rf -- \"\$d\"
+  done
+  # A dangling symlink means a broken site — fail loudly rather than silently.
+  test -f '$ROOT/current/index.html' || { echo 'PUBLISH BROKEN: current/index.html missing'; exit 1; }
+  echo 'live releases:' && ls -1d */ | sort -r | head -3
+" || { echo "PUBLISH FAILED — check '$ROOT/current' on $HOST"; exit 1; }
 
 echo "=== smoke check (best-effort; deploy is already live) ==="
 # Bounded + non-fatal: the public endpoint can be slow, and the swap above has
