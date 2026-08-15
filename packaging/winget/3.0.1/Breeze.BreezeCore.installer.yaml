@@ -1,0 +1,16 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.6.0.schema.json
+PackageIdentifier: Breeze.BreezeCore
+PackageVersion: 3.0.1
+InstallerType: nullsoft          # NSIS — winget derives /S for silent installs
+Scope: machine
+InstallModes:
+  - interactive
+  - silent
+  - silentWithProgress
+UpgradeBehavior: install
+Installers:
+  - Architecture: x64
+    InstallerUrl: https://github.com/monikapurpl3/breeze-core/releases/download/v3.0.1/Breeze-Core-Setup.exe
+    InstallerSha256: F281809E43A658DC6B5D4A0262F85BFCA0F14A71EAE9774C24C05680A2C72EDC
+ManifestType: installer
+ManifestVersion: 1.6.0

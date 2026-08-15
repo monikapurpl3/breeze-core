@@ -22,7 +22,7 @@
     /* one colour per package family — drives its rule, heading, code tint */
     --deb:#e0507c; --rpm:#4d97ea; --suse:#5fc768; --arch:#48bdf2;
     --alpine:#7b8cf0; --owrt:#f2982f; --fbsd:#e35a4a; --nbsd:#f0ad45;
-    --obsd:#efd340; --after:#4fd1c5; --src:#b189f2; --droid:#7fd66b;
+    --obsd:#efd340; --after:#4fd1c5; --src:#b189f2; --droid:#7fd66b; --win:#3fa9f5;
   }
   *{box-sizing:border-box}
   html{-webkit-text-size-adjust:100%}
@@ -58,6 +58,7 @@
   .t-fbsd{background:var(--fbsd);color:#230703!important}.t-nbsd{background:var(--nbsd);color:#1a1000!important}
   .t-obsd{background:var(--obsd);color:#1a1600!important}.t-after{background:var(--after);color:#04201d!important}
   .t-droid{background:var(--droid);color:#06210a!important}
+  .t-win{background:var(--win);color:#03121f!important}
 
   section{margin-top:38px;border-left:3px solid var(--c,#3d4a5c);padding-left:18px}
   section>h2{font-family:var(--display);font-size:21px;font-weight:650;
@@ -136,6 +137,7 @@
     <a class="t-fbsd" href="#freebsd">FreeBSD</a>
     <a class="t-nbsd" href="#netbsd">NetBSD</a>
     <a class="t-obsd" href="#openbsd">OpenBSD</a>
+    <a class="t-win" href="#windows">Windows</a>
     <a class="t-droid" href="#android">Android app</a>
     <a class="t-after" href="#after">After install</a>
   </nav>
@@ -296,6 +298,32 @@ doas sh packaging/bsd/install.sh</pre>
       <a href="https://github.com/monikapurpl3/breeze-core/tree/main/packaging/bsd">packaging/bsd/</a>.</div>
   </section>
 
+  <section id="windows" style="--c:var(--win)">
+    <h2>Windows</h2>
+    <span class="who">Windows 10 · 11 · Server — an installer, not a repo · runs as a service</span>
+    <p class="dim" style="margin-top:0">Unlike the Linux packages, this one does <b>not</b> bundle its own
+      Python: the installer detects Python 3.11+ and builds a private virtualenv, then registers a hardened
+      <code>BreezeCore</code> service (via NSSM, running as <code>LOCAL SERVICE</code>, with a LAN-only
+      firewall rule and a locked-down <code>%ProgramData%reeze-core</code>). An optional component sets up
+      Caddy as a reverse proxy.</p>
+<pre><span class="c"># download, then double-click — or install silently:</span>
+Breeze-Core-Setup.exe /S
+
+<span class="c"># verify it first (PowerShell):</span>
+Get-FileHash .\Breeze-Core-Setup.exe -Algorithm SHA256</pre>
+    <p class="dim"><a href="/windows/Breeze-Core-Setup.exe"><b>⬇ Breeze-Core-Setup.exe</b></a> ·
+      <a href="/windows/Breeze-Core-Setup.exe.sha256">sha256</a> ·
+      <a href="/windows/">all versions</a></p>
+    <div class="note"><b>winget:</b> manifests for <code>Breeze.BreezeCore</code> are published under
+      <a href="/winget/">/winget/</a>. Until the package is accepted into the public
+      <a href="https://github.com/microsoft/winget-pkgs">winget-pkgs</a> repository you can install straight
+      from a manifest:
+<pre style="margin-top:8px"><span class="c"># download the three YAML files from /winget/&lt;version&gt;/ into a folder, then:</span>
+winget install --manifest .reeze-core-@VERSION@\</pre>
+      A private winget <i>source</i> isn't possible here — winget sources speak a REST API, and this host
+      deliberately serves static files only.</div>
+  </section>
+
   <section id="android" style="--c:var(--droid)">
     <h2>Breeze for Android</h2>
     <span class="who">the phone client — <b>not</b> the server · sideload APK · Android 7+</span>
@@ -425,6 +453,8 @@ Restart-Service BreezeCore
     <a href="/alpine/breeze-core@bolero.rsa.pub">RSA</a> (apk) ·
     <a href="/freebsd/breeze-freebsd-repo.rsa.pub">RSA</a> (FreeBSD pkg) ·
     <a href="/openwrt/breeze-core-usign.pub">usign</a> (OpenWrt)<br>
+    <b>Windows:</b> <a href="/windows/Breeze-Core-Setup.exe">Breeze-Core-Setup.exe</a> ·
+    <a href="/winget/">winget manifests</a><br>
     <b>Android:</b> <a href="/android/breeze-latest.apk">breeze-latest.apk</a> ·
     <a href="/android/">all versions</a><br>
     <b>Source:</b> <a href="/src/">source tarballs</a> — for OpenBSD, mips, and any from-source install ·

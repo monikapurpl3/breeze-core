@@ -16,7 +16,11 @@ Unicode true
 !include "FileFunc.nsh"
 
 !ifndef VERSION
-  !define VERSION "2.3.0"
+  ; Deliberately NOT a real version. This used to default to "2.3.0", so an
+  ; installer built without /DVERSION silently claimed to be 2.3.0 whatever
+  ; source it actually contained. Use build-installer.ps1, which reads the
+  ; version from meow_ac/__init__.py.
+  !define VERSION "0.0.0-UNSET"
 !endif
 
 Name "Breeze Core ${VERSION}"

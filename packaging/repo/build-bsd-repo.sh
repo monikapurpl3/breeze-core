@@ -81,4 +81,29 @@ else
   echo "  (no ANDROID_APK given — skipping)"
 fi
 
+echo "=== Windows installer + winget manifests (optional) ==="
+# The .exe is the one artifact CI can't build (makensis needs Windows), so it
+# arrives by path like the APK does. Same reason it's staged here rather than
+# dropped into the published tree: build-repo.sh wipes $OUT on every run.
+if [ -n "${WINDOWS_EXE:-}" ] && [ -f "$WINDOWS_EXE" ]; then
+  mkdir -p "$OUT/windows"
+  cp "$WINDOWS_EXE" "$OUT/windows/Breeze-Core-Setup-${VER}.exe"
+  cp "$WINDOWS_EXE" "$OUT/windows/Breeze-Core-Setup.exe"
+  ( cd "$OUT/windows" \
+      && sha256sum "Breeze-Core-Setup.exe" > "Breeze-Core-Setup.exe.sha256" \
+      && sha256sum "Breeze-Core-Setup-${VER}.exe" > "Breeze-Core-Setup-${VER}.exe.sha256" )
+  chmod 644 "$OUT/windows"/*
+  echo "  Breeze-Core-Setup-${VER}.exe (+ latest, + sha256)"
+else
+  echo "  (no WINDOWS_EXE given — skipping)"
+fi
+
+# winget manifests are source, not build output, so they're always published.
+if [ -d packaging/winget ]; then
+  rm -rf "$OUT/winget"; mkdir -p "$OUT/winget"
+  cp -R packaging/winget/. "$OUT/winget/"
+  find "$OUT/winget" -type f -exec chmod 644 {} +
+  echo "  winget manifests: $(ls packaging/winget | tr '\n' ' ')"
+fi
+
 echo "BSD repos assembled for v$VER under $OUT/{freebsd,netbsd}"
