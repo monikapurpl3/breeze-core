@@ -15,9 +15,20 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Breeze Core — browser check</title>
 <style>
-  :root { color-scheme: light dark; --ok:#1a7f37; --bad:#c8382f; --warn:#9a6700; }
+  /* Paint both background AND text explicitly. Declaring color-scheme and
+     then leaning on the UA defaults left iOS Safari drawing default-coloured
+     text on a white canvas — the verdict and the coloured values showed, and
+     every plain label was invisible. Never let the canvas and the copy come
+     from different places. */
+  :root { color-scheme: light dark; --ok:#1a7f37; --bad:#c8382f; --warn:#9a6700;
+          --bg:#ffffff; --fg:#16130f; --line:rgba(0,0,0,.14); }
+  @media (prefers-color-scheme: dark) {
+    :root { --ok:#4ac26b; --bad:#ff7b72; --warn:#e3b341;
+            --bg:#14110f; --fg:#f3efea; --line:rgba(255,255,255,.16); }
+  }
   body { font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-         margin: 0 auto; padding: 24px 18px 64px; max-width: 640px; }
+         margin: 0 auto; padding: 24px 18px 64px; max-width: 640px;
+         background: var(--bg); color: var(--fg); }
   h1 { font-size: 1.4rem; margin: 0 0 4px; }
   p.sub { margin: 0 0 24px; opacity: .7; font-size: .95rem; }
   #verdict { padding: 16px 18px; border-radius: 12px; font-weight: 600; margin: 0 0 20px;
@@ -26,14 +37,16 @@
   #verdict.fail { color: var(--bad); }
   #verdict.wait { color: var(--warn); }
   table { border-collapse: collapse; width: 100%; font-size: .93rem; }
-  td { padding: 8px 6px; border-bottom: 1px solid rgba(128,128,128,.25); vertical-align: top; }
-  td:first-child { opacity: .75; }
+  td { padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top;
+       color: var(--fg); }
+  td:first-child { opacity: .8; }
   td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
   .y { color: var(--ok); font-weight: 600; }
   .n { color: var(--bad); font-weight: 600; }
-  #ua { margin-top: 22px; font-size: .8rem; opacity: .6; word-break: break-all; }
+  #ua { margin-top: 22px; font-size: .8rem; opacity: .65; word-break: break-all;
+        color: var(--fg); }
   button { font: inherit; padding: 10px 16px; border-radius: 10px; margin-top: 18px;
-           border: 1px solid rgba(128,128,128,.5); background: transparent; color: inherit; }
+           border: 1px solid var(--line); background: transparent; color: var(--fg); }
 </style>
 
 <h1>Breeze Core — browser check</h1>

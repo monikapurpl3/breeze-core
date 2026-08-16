@@ -147,6 +147,15 @@ published data rather than testing:
 | Chrome / Edge | **137** | MDN browser-compat-data |
 | Firefox | **129** | MDN browser-compat-data |
 
+**Measured on the maintainer's own devices** (16 Aug 2026), which is what the
+check page is for:
+
+| Device | Verdict |
+|---|---|
+| Android, Chrome 151 | ✓ Ed25519, key stays unreadable, IndexedDB works |
+| **iPhone, Safari** | ✓ same three — so iOS is not the blocker it might have been |
+| Windows, Chrome 151 | ✓ |
+
 Two caveats that data doesn't settle. MDN's compat file carries **no separate
 entries for iOS Safari, Chrome Android, Firefox Android or Samsung Internet**,
 so those versions are inferred from the shared engine rather than recorded —
@@ -248,7 +257,7 @@ Nothing here requires server changes — 3.0.5 already speaks both versions.
 
 | Risk | Mitigation |
 |---|---|
-| A browser without WebCrypto Ed25519 — **an iPhone below iOS 17**, an old Android, an embedded WebView, a kiosk | Feature-detect and stay v1; run the check page on every device *before* step 5. iOS is the sharp edge: iPhone users have no app, only the panel |
+| A browser without WebCrypto Ed25519 — **an iPhone below iOS 17**, an old Android, an embedded WebView, a kiosk | Feature-detect and stay v1; run the check page on every device *before* step 5. The three devices checked so far all pass, but a household member on an older iPhone would still be locked out by the clamp |
 | Clearing site data wipes a non-extractable key | Expected; re-pair needs LAN approval. Say so in the UI near the pairing screen |
 | Private browsing may block IndexedDB | Detect and fall back to v1 (or refuse to pair, with a clear message) |
 | A hand-rolled SHA3 is a correctness risk | NIST vectors in the test page; cross-check against Python's `hashlib.sha3_512` for the same inputs |
