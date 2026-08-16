@@ -1,4 +1,4 @@
-# Build Breeze-Core-Setup.exe.
+﻿# Build Breeze-Core-Setup.exe.
 #
 # The version is read from meow_ac/__init__.py rather than typed in, because it
 # used to be a hardcoded default in the .nsi ("2.3.0") — so an installer built
