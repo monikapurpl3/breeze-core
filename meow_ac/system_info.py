@@ -184,14 +184,20 @@ def _machine_uptime() -> Optional[float]:
     if v is not None:
         return v
     if platform.system() in ("FreeBSD", "OpenBSD", "NetBSD", "Darwin", "DragonFly"):
-        # kern.boottime prints e.g. { sec = 1755200000, usec = 1 } Tue Aug ...
         raw = _run(["sysctl", "-n", "kern.boottime"])
-        if raw and "sec = " in raw:
-            try:
+        if not raw:
+            return None
+        # Two formats in the wild, and OpenBSD uses the second one:
+        #   FreeBSD/NetBSD/macOS:  { sec = 1755200000, usec = 1 } Tue Aug ...
+        #   OpenBSD:               1755200000
+        try:
+            if "sec = " in raw:
                 sec = int(raw.split("sec = ")[1].split(",")[0].strip())
-                return max(0.0, time.time() - sec)
-            except (ValueError, IndexError):
-                return None
+            else:
+                sec = int(raw.split()[0])
+            return max(0.0, time.time() - sec)
+        except (ValueError, IndexError):
+            return None
     return None
 
 
