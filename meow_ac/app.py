@@ -39,6 +39,7 @@ from meow_ac.api import config as config_api
 from meow_ac.api import meta as meta_api
 from meow_ac.api import metrics as metrics_api
 from meow_ac.api import programs as programs_api
+from meow_ac.api import system as system_api
 from meow_ac.api import units as units_api
 from meow_ac.config.store import ConfigStore
 from meow_ac.devices.history import HistoryBuffer
@@ -168,6 +169,12 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     app.include_router(config_api.build_config_router(store, manager, full_auth))
     app.include_router(
         programs_api.build_programs_router(manager, program_store, scheduler, full_auth)
+    )
+    app.include_router(
+        system_api.build_system_router(
+            store, manager, token_store, program_store, scheduler, history,
+            settings, full_auth,
+        )
     )
 
     # Static mount is last so /api/* routes win over the catch-all.

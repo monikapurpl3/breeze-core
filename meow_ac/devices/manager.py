@@ -77,6 +77,17 @@ class DeviceManager:
         log.info("Connected to unit %s (%s) at %s", unit_id, unit.name, unit.ip)
         return device
 
+    def cached(self, unit_id: str):
+        """The already-connected AC for a unit, or None — never connects.
+
+        For read-only introspection (the /api/system diagnostics screen):
+        asking `get()` instead would pay connect + authenticate + capabilities
+        for every unconnected unit, which on real hardware is ~0.7 s each,
+        serialized behind that unit's lock. Callers must treat None as
+        "unknown", not "offline".
+        """
+        return self._devices.get(unit_id)
+
     def forget(self, unit_id: str) -> None:
         """Drop the cached connection for a unit (e.g. after re-pairing),
         so the next request reconnects with fresh config."""
