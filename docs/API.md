@@ -11,6 +11,7 @@ environment variables, how authentication works, and every REST endpoint.
 [Authentication](#authentication-device-pairing) ·
 [Auth failures](#why-an-auth-failure-happened--the-401-body) ·
 [REST API](#rest-api-reference) ·
+[System info](#system--apisystem) ·
 [Control / state schema](#control--state-schema)
 
 ---
@@ -216,6 +217,47 @@ GET   /api/version   X-API-Key  → {name, version, commit, features[],
 GET   /metrics       X-API-Key  → Prometheus text: unit online/temps (last known,
                                     no live fetch) + scheduler counters + build info
 ```
+
+### System — `/api/system`
+
+Everything this deployment knows about itself, in one response — it backs the
+Breeze app's Nerd screen. Requires the API key **and** a device credential:
+it reports host details and the enrolled-device list, so it sits at the same
+bar as controlling a unit. Added in **3.0.5**; feature flag `system_info`.
+
+```
+GET /api/system   X-API-Key + cred → {
+    server:      {name, version, commit, python{}, started_at, uptime_seconds,
+                  installed_at, timezone, utc_offset_seconds, server_time,
+                  features[], auth_versions[]},
+    os:          {system, pretty_name, distro_id, distro_version, kernel,
+                  kernel_version, hostname, libc},
+    init:        {name, detail}        # systemd | openrc | runit | rc.d | launchd …
+    cpu:         {arch, model, cores, endianness},
+    components:  {msmart-ng, fastapi, uvicorn, starlette, pydantic, …},
+    network:     {hostname, local_addresses[], bind_host, bind_port},
+    connection:  {client_ip, client_is_private, request_url, host_header,
+                  scheme, http_version, forwarded_for, behind_proxy_enabled},
+    paths:       {config, devices, programs, package},
+    settings:    {…the effective runtime settings…},
+    units:       [{id, name, ip, port, has_v3_credentials, connected,
+                   capabilities, samples}],
+    devices:     [{token_id, label, auth_version, created_at, last_used,
+                   expires_at, expires_in_seconds, expired}],
+    programs:    {total, by_kind}, scheduler: {…}, storage: {…}, process: {…},
+    machine_uptime_seconds }
+```
+
+Two design rules worth knowing as a client author. **Every field can be
+null** — each fact is probed defensively and an undeterminable one degrades
+rather than failing the request, so render missing values, don't assume them.
+And **`units[].capabilities` is only populated for units the server already
+has a live connection to**: filling it for the rest would cost a LAN
+round-trip each (~0.7 s on real hardware). Ask
+`/api/units/{id}/capabilities` per unit if you need the others.
+
+It contains **no secrets** — not the API key, not device public keys, not the
+per-unit V3 token/key (`has_v3_credentials` is a boolean).
 
 ### Units — `/api/units`
 

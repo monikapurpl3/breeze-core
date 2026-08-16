@@ -51,7 +51,7 @@ bolt on:
 | **Automation, server-side** | Favourites, schedules, and **temperature curves** that run on the server — they fire whether or not your phone is on, charged, or home |
 | **Live state** | **SSE push**: changes (yours, a schedule's, another client's) arrive without polling |
 | **Operations** | Native packages for **deb · rpm · pacman · apk · OpenWrt · FreeBSD · NetBSD**, a Windows installer, a Docker image, and a **signed repo** so updates come through your package manager |
-| **When something's off** | A real diagnostic battery — `breeze-core diag --auto`, mirrored inside the app: auth posture, per-unit latency, capability probing, input validation |
+| **When something's off** | A real diagnostic battery — `breeze-core diag --auto`, mirrored inside the app: auth posture, per-unit latency, capability probing, input validation. `GET /api/system` reports the whole deployment (OS, init, arch, every dependency version, units, enrolled devices) for the app's Nerd screen |
 | **Security, from the start** | Two-credential access with **Ed25519 request signing**, LAN-gated admin approval, rate limiting, strict CSP + security headers, and a full go-live runbook in [HARDENING.md](HARDENING.md) |
 | **Observability** | Prometheus `/metrics` and a state-history buffer |
 
