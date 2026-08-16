@@ -1,0 +1,24 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
+PackageIdentifier: Breeze.BreezeCore
+PackageVersion: 3.0.5
+PackageLocale: en-US
+Publisher: monikapurpl3
+PublisherUrl: https://github.com/monikapurpl3
+PackageName: Breeze Core
+PackageUrl: https://github.com/monikapurpl3/breeze-core
+License: AGPL-3.0-or-later
+LicenseUrl: https://github.com/monikapurpl3/breeze-core/blob/main/LICENSE
+ShortDescription: Self-hosted, LAN-first REST API and web control panel for Midea air conditioners.
+Description: >-
+  Breeze Core controls Midea air conditioners over your own network — a REST API,
+  a web control panel, server-side schedules and temperature curves, and a
+  diagnostic CLI. No cloud dependency after the initial pairing. The installer
+  registers a hardened Windows service; Python 3.11+ must already be installed.
+Tags:
+  - hvac
+  - home-automation
+  - midea
+  - air-conditioning
+  - self-hosted
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0
