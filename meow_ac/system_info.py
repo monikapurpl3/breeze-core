@@ -156,11 +156,22 @@ def cpu() -> Dict[str, Any]:
     system = platform.system()
     if system == "Linux":
         def _from_cpuinfo():
+            # Match on the whole field name, not a prefix, and in preference
+            # order. x86 has BOTH "model : 158" and "model name : Intel(R)…",
+            # so a prefix match on "model" wins the race against "model name"
+            # and reports a stepping number as the CPU. Ask me how I know.
+            wanted = ("model name", "hardware", "cpu model", "machine", "model")
+            found: Dict[str, str] = {}
             for line in Path("/proc/cpuinfo").read_text().splitlines():
-                # x86 says "model name", ARM says "Hardware"/"Model", s390 "machine".
-                for key in ("model name", "Model", "Hardware", "cpu model"):
-                    if line.lower().startswith(key.lower()):
-                        return line.split(":", 1)[1].strip()
+                field, sep, value = line.partition(":")
+                if not sep:
+                    continue
+                key = field.strip().lower()
+                if key in wanted and key not in found and value.strip():
+                    found[key] = value.strip()
+            for key in wanted:      # first by preference, not by file order
+                if key in found:
+                    return found[key]
             return None
         model = _safe(_from_cpuinfo)
     elif system == "Darwin":
