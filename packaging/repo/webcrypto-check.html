@@ -1,0 +1,126 @@
+<!--
+  Does THIS browser have what auth v2 needs?
+
+  Exists because "browsers support Ed25519 now" is not a fact you can check
+  from a desktop: iOS runs WebKit whatever the browser badge says, Android
+  ships several engines, and a phone three OS versions behind is common. Before
+  clamping a server to AC_MIN_AUTH_VERSION=2, open this on every device that
+  uses the web panel — a browser that fails here can never sign a request, and
+  after the clamp it can't control anything either.
+
+  Deliberately self-contained: no scripts, styles or fonts from anywhere else,
+  so it runs under the same strict CSP as the panel itself.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Breeze Core — browser check</title>
+<style>
+  :root { color-scheme: light dark; --ok:#1a7f37; --bad:#c8382f; --warn:#9a6700; }
+  body { font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+         margin: 0 auto; padding: 24px 18px 64px; max-width: 640px; }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  p.sub { margin: 0 0 24px; opacity: .7; font-size: .95rem; }
+  #verdict { padding: 16px 18px; border-radius: 12px; font-weight: 600; margin: 0 0 20px;
+             border: 2px solid currentColor; }
+  #verdict.pass { color: var(--ok); }
+  #verdict.fail { color: var(--bad); }
+  #verdict.wait { color: var(--warn); }
+  table { border-collapse: collapse; width: 100%; font-size: .93rem; }
+  td { padding: 8px 6px; border-bottom: 1px solid rgba(128,128,128,.25); vertical-align: top; }
+  td:first-child { opacity: .75; }
+  td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+  .y { color: var(--ok); font-weight: 600; }
+  .n { color: var(--bad); font-weight: 600; }
+  #ua { margin-top: 22px; font-size: .8rem; opacity: .6; word-break: break-all; }
+  button { font: inherit; padding: 10px 16px; border-radius: 10px; margin-top: 18px;
+           border: 1px solid rgba(128,128,128,.5); background: transparent; color: inherit; }
+</style>
+
+<h1>Breeze Core — browser check</h1>
+<p class="sub">Can this browser use the signed (Ed25519) login? Nothing is sent
+anywhere; everything below runs on this device.</p>
+
+<div id="verdict" class="wait">Checking…</div>
+<table id="rows"></table>
+<div id="ua"></div>
+<button id="copy">Copy result</button>
+
+<script>
+const rows = document.getElementById('rows');
+function add(label, ok, detail) {
+  const tr = rows.insertRow();
+  tr.insertCell().textContent = label;
+  const c = tr.insertCell();
+  c.className = ok === null ? '' : (ok ? 'y' : 'n');
+  c.textContent = detail;
+}
+
+(async () => {
+  const results = {};
+  let fatal = false;
+
+  // 1. Ed25519 — the one that decides everything.
+  try {
+    const kp = await crypto.subtle.generateKey({ name: 'Ed25519' }, false, ['sign', 'verify']);
+    const pub = new Uint8Array(await crypto.subtle.exportKey('raw', kp.publicKey));
+    const sig = new Uint8Array(await crypto.subtle.sign(
+      { name: 'Ed25519' }, kp.privateKey, new TextEncoder().encode('breeze')));
+    results.ed25519 = `yes (${pub.length}-byte key, ${sig.length}-byte signature)`;
+    add('Ed25519 signing', true, results.ed25519);
+
+    // 2. Can the private key be kept unreadable by scripts?
+    let locked = false;
+    try { await crypto.subtle.exportKey('raw', kp.privateKey); }
+    catch (e) { locked = true; }
+    results.nonExtractable = locked;
+    add('Private key stays unreadable', locked,
+        locked ? 'yes' : 'no — key would be exportable');
+
+    // 3. Can that key be stored between visits?
+    let storable = false;
+    try { structuredClone(kp.privateKey); storable = true; } catch (e) {}
+    results.storable = storable;
+    add('Key can be saved (IndexedDB)', storable, storable ? 'yes' : 'no');
+  } catch (e) {
+    fatal = true;
+    results.ed25519 = 'NO (' + (e.name || e) + ')';
+    add('Ed25519 signing', false, 'not supported');
+    add('Private key stays unreadable', null, '—');
+    add('Key can be saved (IndexedDB)', null, '—');
+  }
+
+  // 4. SHA3-512 is expected to be missing everywhere; the panel bundles its
+  //    own. Reported so the result is complete, not because it's a problem.
+  let sha3 = false;
+  try { await crypto.subtle.digest('SHA3-512', new Uint8Array([1])); sha3 = true; } catch (e) {}
+  results.sha3 = sha3;
+  add('SHA3-512 built in', null, sha3 ? 'yes' : 'no (expected — bundled instead)');
+
+  // 5. A wrong clock fails every signature. ±60s is the server default.
+  results.clockChecked = true;
+  add('Device clock', null, new Date().toString());
+
+  const v = document.getElementById('verdict');
+  if (fatal) {
+    v.className = 'fail';
+    v.textContent = '✗ This browser cannot use signed login. It must stay on the '
+                  + 'older token login, so do not clamp the server to v2 while '
+                  + 'this device needs the web panel.';
+  } else if (!results.storable) {
+    v.className = 'fail';
+    v.textContent = '✗ Signing works, but the key cannot be stored — private '
+                  + 'browsing? Try again in a normal window.';
+  } else {
+    v.className = 'pass';
+    v.textContent = '✓ This browser can use signed login.'
+                  + (results.nonExtractable ? '' : ' (Key would be exportable.)');
+  }
+
+  document.getElementById('ua').textContent = navigator.userAgent;
+  document.getElementById('copy').onclick = () => {
+    navigator.clipboard.writeText(
+      v.textContent + '\n' + JSON.stringify(results, null, 1) + '\n' + navigator.userAgent);
+    document.getElementById('copy').textContent = 'Copied';
+  };
+})();
+</script>

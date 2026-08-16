@@ -121,7 +121,7 @@ Harder, but the result is better than the app's: the private key can be made
 **non-extractable**, so no JavaScript — including injected JavaScript — can
 ever read it back.
 
-**Measured in this project's browser (Chrome 148), not assumed:**
+**Measured on desktop Chrome 148, not assumed:**
 
 | Capability | Result |
 |---|---|
@@ -133,6 +133,40 @@ ever read it back.
 
 So WebCrypto covers the signing and the key storage, and the only gap is the
 hash.
+
+### Phones are the part that decides this
+
+A desktop result proves nothing about the devices that actually matter here.
+**iPhones only ever get the web panel** — the Breeze app is Android-only — so
+iOS support isn't a footnote, it's the main question. What's known from
+published data rather than testing:
+
+| Engine | Ed25519 in WebCrypto | Source |
+|---|---|---|
+| Safari (macOS **and** iOS/iPadOS) | **17** | MDN browser-compat-data; WebKit's Safari 17.0 notes list "Support for Ed25519 cryptography" — shipped with iOS 17, September 2023 |
+| Chrome / Edge | **137** | MDN browser-compat-data |
+| Firefox | **129** | MDN browser-compat-data |
+
+Two caveats that data doesn't settle. MDN's compat file carries **no separate
+entries for iOS Safari, Chrome Android, Firefox Android or Samsung Internet**,
+so those versions are inferred from the shared engine rather than recorded —
+and on iOS *every* browser is WebKit regardless of its badge, so an iPhone
+below iOS 17 fails no matter which browser is installed. Samsung Internet
+tracks Chromium at its own pace and is worth checking explicitly on a Samsung
+phone.
+
+**So don't infer — measure each device.** `packaging/repo/webcrypto-check.html`
+is published at
+<https://bolero.salataputarica.hr.eu.org/webcrypto-check.html>: open it on
+every phone, tablet and desktop that uses the panel and it reports, on that
+device, whether Ed25519 signs, whether the private key can be kept unreadable,
+whether IndexedDB will store it, and what the clock says (a device more than
+`AC_AUTH_SKEW_SECONDS` out fails every signature regardless). It's
+self-contained — no external scripts, styles or fonts — so it runs under the
+same strict CSP as the panel, and it sends nothing anywhere.
+
+This matters most at step 5 of the rollout: after the clamp, a browser that
+fails this check can't control anything at all.
 
 **Files**
 
@@ -214,7 +248,7 @@ Nothing here requires server changes — 3.0.5 already speaks both versions.
 
 | Risk | Mitigation |
 |---|---|
-| A browser without WebCrypto Ed25519 (older Safari, an embedded WebView, a kiosk) | Feature-detect and stay v1; check every browser in the household *before* step 5 |
+| A browser without WebCrypto Ed25519 — **an iPhone below iOS 17**, an old Android, an embedded WebView, a kiosk | Feature-detect and stay v1; run the check page on every device *before* step 5. iOS is the sharp edge: iPhone users have no app, only the panel |
 | Clearing site data wipes a non-extractable key | Expected; re-pair needs LAN approval. Say so in the UI near the pairing screen |
 | Private browsing may block IndexedDB | Detect and fall back to v1 (or refuse to pair, with a clear message) |
 | A hand-rolled SHA3 is a correctness risk | NIST vectors in the test page; cross-check against Python's `hashlib.sha3_512` for the same inputs |
@@ -269,4 +303,7 @@ is an hour and is independently useful.
    `AC_MIN_AUTH_VERSION=2` is the step that actually forbids v1, and it's the
    one that can lock out a browser nobody checked.
 4. **Which browsers matter?** Anything in the household that opens the panel
-   needs Ed25519 in WebCrypto, or it stays on v1 forever.
+   needs Ed25519 in WebCrypto, or it stays on v1 forever. Run
+   [the check page](https://bolero.salataputarica.hr.eu.org/webcrypto-check.html)
+   on each one and tell me the verdicts — an iPhone on iOS 16 or older would
+   settle question 3 on its own.

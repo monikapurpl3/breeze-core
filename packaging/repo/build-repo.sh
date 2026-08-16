@@ -222,6 +222,10 @@ EOS
 
 # --- landing page ---------------------------------------------------------------
 sed "s/@VERSION@/$VER/g" packaging/repo/index.html > "$OUT/index.html"
+# Self-contained "can this browser do signed login?" page — see
+# docs/AUTH-V2-MIGRATION.md. Published so it can be opened on a phone, which
+# is the only way to answer the question for iOS and Android.
+cp packaging/repo/webcrypto-check.html "$OUT/webcrypto-check.html"
 
 echo ""
 echo "== $OUT =="
