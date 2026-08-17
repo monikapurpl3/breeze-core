@@ -106,4 +106,34 @@ if [ -d packaging/winget ]; then
   echo "  winget manifests: $(ls packaging/winget | tr '\n' ' ')"
 fi
 
+echo "=== proof-of-concept builds (optional) ==="
+# Frozen at whatever tag they were built from, deliberately outside the signed
+# repositories: these are developer aids, not packages anyone should install
+# from a package manager. Staged here like the APK and the .exe because
+# build-repo.sh wipes $OUT on every run.
+#   POC_DIR=/path/with/tarballs ./packaging/repo/build-bsd-repo.sh
+if [ -n "${POC_DIR:-}" ] && [ -d "$POC_DIR" ]; then
+  rm -rf "$OUT/poc"; mkdir -p "$OUT/poc"
+  found=0
+  for f in "$POC_DIR"/*.tar.gz "$POC_DIR"/*.tar; do
+    [ -f "$f" ] || continue
+    cp "$f" "$OUT/poc/"
+    found=$((found + 1))
+  done
+  if [ "$found" -gt 0 ]; then
+    ( cd "$OUT/poc" && for f in *; do
+        case "$f" in *.sha256) continue ;; esac
+        sha256sum "$f" > "$f.sha256"
+      done )
+    chmod 644 "$OUT/poc"/*
+    echo "  $found artifact(s):"
+    ls "$OUT/poc" | grep -v '\.sha256$' | sed 's/^/    /'
+  else
+    rmdir "$OUT/poc" 2>/dev/null || true
+    echo "  (POC_DIR held no tarballs)"
+  fi
+else
+  echo "  (no POC_DIR given — skipping)"
+fi
+
 echo "BSD repos assembled for v$VER under $OUT/{freebsd,netbsd}"

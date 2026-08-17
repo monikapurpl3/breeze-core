@@ -22,7 +22,7 @@
     /* one colour per package family — drives its rule, heading, code tint */
     --deb:#e0507c; --rpm:#4d97ea; --suse:#5fc768; --arch:#48bdf2;
     --alpine:#7b8cf0; --owrt:#f2982f; --fbsd:#e35a4a; --nbsd:#f0ad45;
-    --obsd:#efd340; --after:#4fd1c5; --src:#b189f2; --droid:#7fd66b; --win:#3fa9f5;
+    --obsd:#efd340; --after:#4fd1c5; --src:#b189f2; --droid:#7fd66b; --win:#3fa9f5; --poc:#ff8fa3;
   }
   *{box-sizing:border-box}
   html{-webkit-text-size-adjust:100%}
@@ -59,6 +59,7 @@
   .t-obsd{background:var(--obsd);color:#1a1600!important}.t-after{background:var(--after);color:#04201d!important}
   .t-droid{background:var(--droid);color:#06210a!important}
   .t-win{background:var(--win);color:#03121f!important}
+  .t-poc{background:var(--poc);color:#2b0410!important}
 
   section{margin-top:38px;border-left:3px solid var(--c,#3d4a5c);padding-left:18px}
   section>h2{font-family:var(--display);font-size:21px;font-weight:650;
@@ -139,6 +140,7 @@
     <a class="t-obsd" href="#openbsd">OpenBSD</a>
     <a class="t-win" href="#windows">Windows</a>
     <a class="t-droid" href="#android">Android app</a>
+    <a class="t-poc" href="#poc">Proof of concept</a>
     <a class="t-after" href="#after">After install</a>
   </nav>
 
@@ -351,6 +353,81 @@ sha256sum -c breeze-latest.apk.sha256</pre>
     <div class="note"><b>App and server version independently.</b> The app talks to any server version and
       feature-detects what it can use; you don't have to upgrade both together. It needs a Breeze Core
       server on your network — pair once with the server's API key and an admin approval on the LAN.</div>
+  </section>
+
+  <section id="poc" style="--c:var(--poc)">
+    <h2>Proof of concept</h2>
+    <span class="who">s390x · ppc64le · MIPS · Termux — frozen at v3.0.5, for developers</span>
+    <p class="dim" style="margin-top:0"><b>These are not products.</b> They exist so that
+      somebody porting Breeze Core to an unusual machine starts from a working build and a
+      list of the walls we hit, instead of from scratch. They are <b>frozen at 3.0.5</b>, will
+      not track releases, are not in the signed repositories, and get no support. If one
+      breaks, the interesting part is <i>how</i> — that's the whole point of publishing them.</p>
+
+    <div class="note">
+      <b>Everything below was verified by running the built binary on the target</b> (under
+      emulation), not by a build exiting zero. Where something doesn't work, the entry says so
+      and says why.
+    </div>
+
+    <h3>Termux (Android) — works, no root</h3>
+    <p class="dim">Android is Bionic, so <b>no glibc or musl bundle can run there</b> — not even
+      the arm64 musl build, same CPU notwithstanding. These are built inside Termux, for Termux:
+      the bootloader carries Termux's own interpreter path, so they run under Termux and nowhere
+      else on the phone. Rootless throughout; port 8420 is above the privileged range.</p>
+<pre><span class="c"># prebuilt — no compiler, no Rust, nothing to build on the phone</span>
+curl -fsSLO https://bolero.salataputarica.hr.eu.org/poc/breeze-core-3.0.5-termux-aarch64.tar.gz
+tar -xzf breeze-core-3.0.5-termux-aarch64.tar.gz
+./breeze-core/breeze-core version
+
+<span class="c"># it will be frozen by Android when the screen sleeps unless you say:</span>
+termux-wake-lock
+./breeze-core/breeze-core serve --host 0.0.0.0 --port 8420</pre>
+    <p class="dim">Prefer to build it yourself on the device? <code>packaging/termux/install.sh</code>
+      does a source install — but budget <b>15–40 minutes</b>, because pydantic-core is a Rust
+      extension with no Android wheel and compiles on the phone. Two things bite there and neither
+      error mentions Android: <code>maturin</code> needs <code>ANDROID_API_LEVEL</code> exported,
+      and PyInstaller runs <code>ldd</code>, which Android doesn't have.</p>
+
+    <h3>s390x — works (musl)</h3>
+    <p class="dim">Mainframes run air conditioning too, and a shop with a z-series has somewhere
+      dependable to put a small service. Built on Alpine edge because pydantic-core's Rust core
+      needs a modern toolchain; verified running under emulated s390x.</p>
+<pre>curl -fsSLO https://bolero.salataputarica.hr.eu.org/poc/breeze-core-3.0.5-linux-musl-s390x.tar.gz
+tar -xzf breeze-core-3.0.5-linux-musl-s390x.tar.gz
+./bundle-musl-s390x/breeze-core/breeze-core version</pre>
+    <p class="dim"><b>Sharp edge worth knowing if you rebuild it:</b> emulated <b>gcc segfaults</b>
+      (internal compiler error in cc1) partway through PyInstaller's bootloader on this
+      architecture. clang gets through. And PyInstaller's own s390x wheel carries
+      <i>glibc-only</i> bootloaders, so the build fails at the very last step unless you compile
+      one with <code>waf distclean all</code> — note <code>distclean</code>, or waf reports
+      success in 13 milliseconds having built nothing.</p>
+
+    <h3>ppc64le — in progress</h3>
+    <p class="dim">Same recipe as s390x. There is real ppc64le kit in the world, and it is
+      exactly the sort of machine that sits in a room that needs cooling.</p>
+
+    <h3>MIPS — a toolchain wall, and what we're doing about it</h3>
+    <p class="dim">MIPS deserves the honest version, because a lot of networking hardware is
+      MIPS and it would be easy to imply this works.</p>
+    <ul class="dim">
+      <li><b>Rust demoted every MIPS Linux target to tier 3.</b> No prebuilt <code>std</code>,
+        no official builds. FastAPI needs pydantic v2, whose core is Rust — so the options are a
+        distro-provided <code>rustc</code> that was bootstrapped for the architecture, building
+        <code>std</code> yourself with a nightly <code>-Z build-std</code>, or not at all.</li>
+      <li><b>32-bit is worse than 64-bit.</b> The usual container emulators register
+        <code>mips64</code>/<code>mips64le</code> only. o32 <code>mipsel</code> images get
+        dispatched to the n32 handler and rejected outright — and 32-bit mipsel is precisely
+        what most small routers are.</li>
+    </ul>
+    <p class="dim">So for MIPS the deliverable is planned as a <b>wheelhouse</b> rather than a
+      bundle: the compiled wheels (pydantic-core, pycryptodome, brotli) plus an offline
+      <code>pip install</code>. That skips the part a developer genuinely can't stomach — the
+      Rust compile under emulation — without pretending there's a drop-in binary.</p>
+
+    <p class="dim" style="margin-top:18px"><a href="/poc/"><b>⬇ browse /poc/</b></a> ·
+      every file has a <code>.sha256</code> beside it ·
+      built from the <a href="/src/">v3.0.5 source</a></p>
   </section>
 
   <section id="after" style="--c:var(--after)">
