@@ -43,16 +43,33 @@ while true; do
     *)    echo "watchdog: $NAME finished on its own — nothing to do"; exit 0 ;;
   esac
 
-  # "12.34%" -> 12 (integer compare keeps this dependency-free)
-  raw="$(docker stats --no-stream --format '{{.CPUPerc}}' "$NAME" 2>/dev/null | tr -d ' %')"
+  # "12.34%" -> 12 (integer compare keeps this dependency-free). The I/O counters
+  # come from the same call, because CPU alone is not a sufficient signal.
+  stat="$(docker stats --no-stream --format '{{.CPUPerc}}|{{.NetIO}}|{{.BlockIO}}' "$NAME" 2>/dev/null)"
+  raw="$(echo "$stat" | cut -d'|' -f1 | tr -d ' %')"
+  io="$(echo "$stat" | cut -d'|' -f2,3)"
   cpu="${raw%%.*}"
   [ -z "$cpu" ] && cpu=0
+
+  # A large download is legitimately near-0% CPU. This watchdog killed a
+  # perfectly healthy Termux build five minutes into fetching 239 MB of
+  # packages — a false positive indistinguishable, by CPU alone, from the real
+  # deadlock it was written to catch. So idleness now requires no CPU *and* no
+  # I/O: a wedged qemu futex moves neither counter, while any download or disk
+  # write moves one. Compared as opaque strings; only "did it change" matters.
+  if [ "$io" != "${last_io:-}" ]; then
+    [ "$idle" -gt 0 ] && echo "watchdog: I/O moving ($io) — idle counter reset"
+    last_io="$io"
+    idle=0
+    sleep "$EVERY"
+    continue
+  fi
 
   if [ "$cpu" -lt "$PCT" ] 2>/dev/null; then
     idle=$(( idle + 1 ))
     echo "watchdog: ${raw:-?}% idle ($idle/$NEEDED)"
     if [ "$idle" -ge "$NEEDED" ]; then
-      echo "watchdog: STALLED for ${MINS}m at under ${PCT}% — killing $NAME"
+      echo "watchdog: STALLED for ${MINS}m at under ${PCT}% with no I/O — killing $NAME"
       # Snapshot what the guest threads were doing; this is the evidence that
       # says "deadlock" rather than "slow", and it's gone once the container is.
       docker exec "$NAME" sh -c 'for d in /proc/[0-9]*; do
