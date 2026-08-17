@@ -26,5 +26,15 @@ body:
       options:
         - label: API / auth
         - label: Scheduler / programs
-        - label: Web UI
+        - label: Web panel
+        - label: CLI (diag / approve / devices)
+        - label: Packaging (deb / rpm / apk / pacman / OpenWrt / BSD / Windows / Nix)
+        - label: A new platform or architecture
+        - label: Observability (metrics / history / system info)
         - label: Deployment / docs
+  - type: markdown
+    attributes:
+      value: |
+        If this needs the app to change too, please say so — the app lives in
+        [breeze](https://github.com/monikapurpl3/breeze) and the two are
+        deliberately decoupled: the server never assumes a particular client.

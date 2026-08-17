@@ -1,19 +1,28 @@
 name: Bug report
-description: Something in Breeze Core (server / API / web UI) isn't working
+description: Something in Breeze Core (server / API / web panel / CLI) isn't working
 labels: ["bug"]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for the report! **Do not paste your API key, device tokens, or full `config.json`.**
-        Redact IPs/hostnames you'd rather keep private.
+        Thanks for the report.
+
+        **Don't paste secrets:** not your `api_key`, not a device token, not
+        `config.json` or `devices.json`, and not a unit's V3 `token`/`key`.
+
+        Most of the boxes below can be read straight off one screen — in the
+        Breeze app, **Settings → tap the version seven times → Nerd** (needs
+        Breeze Core 3.0.5+). Otherwise `breeze-core version`, the web panel
+        footer, and `breeze-core diag --auto` have everything.
+
   - type: textarea
     id: what
     attributes:
       label: What happened?
-      description: What you expected vs. what actually happened.
+      description: What you expected, and what happened instead.
     validations:
       required: true
+
   - type: textarea
     id: repro
     attributes:
@@ -24,36 +33,160 @@ body:
         3. …
     validations:
       required: true
+
   - type: input
     id: version
     attributes:
-      label: Breeze Core version / commit
-      placeholder: "e.g. main @ abc1234"
+      label: Breeze Core version
+      description: "`breeze-core version`, the panel footer, or Nerd → Server → Version."
+      placeholder: "3.0.5"
     validations:
       required: true
+
+  - type: input
+    id: commit
+    attributes:
+      label: Build commit
+      description: Printed next to the version. Tells us the exact build.
+      placeholder: "2c5e6dc"
+
   - type: input
     id: os
     attributes:
-      label: OS and Python version
-      placeholder: "e.g. AlmaLinux 10.2, Python 3.12"
+      label: Operating system
+      description: Nerd → Host → Operating system, or `cat /etc/os-release`.
+      placeholder: "AlmaLinux 10.2 / Debian 13 / FreeBSD 15.1 / Windows 11"
     validations:
       required: true
+
   - type: dropdown
-    id: deploy
+    id: arch
     attributes:
-      label: How are you running it?
+      label: Architecture
       options:
-        - systemd service
-        - manual (uvicorn)
-        - container
-        - behind nginx
-        - behind Apache
-        - other / experimental (BSD/macOS/Windows/WSL)
+        - x86_64 / amd64
+        - aarch64 / arm64
+        - armv7 / armhf
+        - riscv64
+        - s390x
+        - ppc64le
+        - mips / mipsel / mips64el
+        - other
     validations:
       required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: How did you install it?
+      options:
+        - Signed package repo (apt / dnf / zypper / pacman / apk / opkg)
+        - Package or tarball downloaded from a release
+        - Windows installer (Breeze-Core-Setup.exe)
+        - Docker / Podman image
+        - From source (venv)
+        - FreeBSD .pkg / NetBSD .tgz / OpenBSD from source
+        - Nix / NixOS flake
+        - Termux
+        - A proof-of-concept build (s390x, ppc64le, MIPS…)
+        - Other / not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: service
+    attributes:
+      label: How is it running?
+      description: Nerd → Host → Init system, if you're not sure.
+      options:
+        - systemd unit
+        - OpenRC
+        - runit / s6
+        - BSD rc.d
+        - Windows service (NSSM)
+        - Container
+        - By hand (`breeze-core serve` / uvicorn)
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: exposure
+    attributes:
+      label: How do you reach it?
+      description: Worth knowing — a proxy that doesn't forward the real client address is the usual cause of LAN-only checks failing.
+      options:
+        - Directly on the LAN
+        - Behind nginx
+        - Behind Apache
+        - Behind Caddy
+        - Over a VPN (WireGuard / Tailscale)
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part?
+      options:
+        - Pairing / enrolment / approval
+        - Authentication on an already-paired device (401s)
+        - Unit control or state
+        - Programs / scheduler (favourites, schedules, curves)
+        - Live updates (SSE)
+        - Web panel
+        - CLI (diag / approve / devices / revoke)
+        - Packaging / install / upgrade
+        - Docs
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: authv
+    attributes:
+      label: "Auth version of the affected client, if it's a 401"
+      description: Nerd → Connection → Auth version, or `breeze-core devices`.
+      options:
+        - "not applicable"
+        - "v2 (Ed25519 signed)"
+        - "v1 (bearer token)"
+        - "not sure"
+
+  - type: input
+    id: auth_reason
+    attributes:
+      label: "…and the `reason` the server gave"
+      description: |
+        Since 3.0.2 every 401 says why, and it decides what to do: `clock_skew`,
+        `replay` and `incomplete_signature` are retryable — the credential is
+        fine, that request wasn't. `expired`, `unknown_key`, `bad_signature`,
+        `no_credential` mean re-enrol. `bad_api_key` means the shared key is
+        wrong, not the device.
+      placeholder: "clock_skew"
+
+  - type: input
+    id: units
+    attributes:
+      label: Air conditioner model(s), if hardware is involved
+      description: What works depends on your firmware and on what msmart-ng exposes — some units silently ignore features.
+      placeholder: "Midea MSAGBU-09HRFN8 (V3), 3 units"
+
+  - type: input
+    id: pyver
+    attributes:
+      label: Python version
+      description: Only if you installed from source — the packaged builds carry their own runtime.
+      placeholder: "3.12.13"
+
   - type: textarea
     id: logs
     attributes:
       label: Relevant logs
-      description: e.g. `journalctl -u breeze-core -n 50`. Redact IPs/secrets.
+      description: |
+        systemd: `journalctl -u breeze-core -n 80 --no-pager`
+        auth failures only: `journalctl -u breeze-core -t meow-ac.auth -n 40`
+        Windows: `Get-Content $env:ProgramData\breeze-core\logs\*.log -Tail 80`
+        container: `docker logs --tail 80 <container>`
       render: text
