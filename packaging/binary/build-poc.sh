@@ -105,14 +105,134 @@ build_mips64le() {
   fi
 }
 
+# Turn an exported bundle directory into the tarball that actually gets
+# published — and fix, in the process, the two things a raw buildx export gets
+# wrong on this host.
+#
+# 1. MODES. buildx writes to the host filesystem, and on Windows that carries no
+#    POSIX modes, so the entry point lands as -rw-r--r--. Tar faithfully records
+#    that, and the user's very first act after extracting is "Permission denied"
+#    on a binary that is in fact perfectly good. (Same root cause as built_ok()
+#    above not testing for -x.)
+# 2. LAYOUT. The export nests as bundle-musl-<arch>/breeze-core/breeze-core, so
+#    extracting dumps a directory named after our build tree rather than after
+#    the release. One versioned top-level directory is what people expect.
+#
+# Both are fixed inside a throwaway Linux container rather than on the host: the
+# modes are real there, and the resulting tarball is then identical no matter
+# which OS drove the build. Streamed over stdin/stdout on purpose — Docker
+# Desktop bind mounts on this machine sometimes present as silently empty, which
+# is the same reason packaging/nfpm/build-packages.sh streams.
+stage_tarball() {
+  local arch="$1" libc="$2" dest="$3"
+  local name="breeze-core-$VER-linux-$libc-$arch"
+  local tgz="$OUT/$name.tar.gz"
+  if [ -s "$tgz" ]; then
+    echo "  $arch: tarball already staged ($(du -h "$tgz" | cut -f1))"
+    return 0
+  fi
+  local notesdir; notesdir="$(mktemp -d)"
+  poc_notes "$arch" "$libc" > "$notesdir/NOTES.md"
+  # One tar, two source directories: the bundle, then the notes beside it. (Two
+  # -C flags in one invocation, rather than concatenating archives — tar applies
+  # them in order and the members land at the top level either way.)
+  tar -cf - -C "$dest" breeze-core -C "$notesdir" NOTES.md \
+    | MSYS_NO_PATHCONV=1 docker run -i --rm -e "NAME=$name" alpine:3.19 sh -c '
+        set -eu
+        exec 3>&1 1>&2
+        mkdir -p /w && cd /w && tar -xf -
+        mv breeze-core "$NAME" && mv NOTES.md "$NAME/NOTES.md"
+        # The freeze step built these; restore what the export dropped.
+        chmod 755 "$NAME/breeze-core"
+        find "$NAME" -type d -exec chmod 755 {} +
+        find "$NAME" -type f -name "*.so*" -exec chmod 755 {} +
+        # Nobody wants a tarball full of uid 197609 from a Windows host. Alpine
+        # ships BusyBox tar, which has no --owner/--group, so chown instead —
+        # we are root in here, and tar then records what it finds.
+        chown -R 0:0 "$NAME"
+        tar -czf - "$NAME" >&3
+      ' > "$tgz"
+  rm -rf "$notesdir"
+  if [ ! -s "$tgz" ]; then
+    echo "  $arch: staging FAILED — no tarball written"
+    rm -f "$tgz"; return 1
+  fi
+  ( cd "$OUT" && sha256sum "$name.tar.gz" > "$name.tar.gz.sha256" )
+  echo "  $arch: staged $name.tar.gz ($(du -h "$tgz" | cut -f1))"
+}
+
+# What ships inside every PoC tarball. These bundles are explicitly not
+# plug-and-play products — they exist to save a developer on an odd
+# architecture the day it takes to discover the same traps we already hit — so
+# the notes say what it is, what it is not, and where the sharp edges are.
+poc_notes() {
+  local arch="$1" libc="$2"
+  cat <<NOTES
+# Breeze Core $VER — proof-of-concept bundle ($libc/$arch)
+
+Built from commit \`$COMMIT\`, frozen at $VER. **Not a release artifact.**
+
+## What this is
+
+A self-contained PyInstaller bundle for **linux-$libc-$arch**, an architecture
+outside Breeze Core's supported set. It was cross-checked the only way that
+means anything: the frozen binary ran \`breeze-core version\` on an emulated
+$arch guest during the build, and the build fails if that step does not print.
+
+## What this is not
+
+- **Not supported, not updated.** No package repository, no signature, no
+  upgrade path. It will not track future releases.
+- **Not a system install.** No systemd unit, no service account, no
+  \`/etc/breeze-core\`. See \`docs/INSTALL.md\` for what a real deployment does.
+- **Not performance-tested** on this architecture.
+
+## Running it
+
+\`\`\`sh
+tar -xzf breeze-core-$VER-linux-$libc-$arch.tar.gz
+cd breeze-core-$VER-linux-$libc-$arch
+./breeze-core version
+AC_CONFIG=./config.json ./breeze-core serve --host 127.0.0.1 --port 8420
+\`\`\`
+
+\`breeze-core\` carries the diagnostic and approval CLIs too — \`diag\`,
+\`approve\`, \`setup\`. Run it with no arguments for the list.
+
+## If you are porting this yourself
+
+The build recipe is \`packaging/binary/Dockerfile.musl\` plus
+\`packaging/binary/build-poc.sh\` in the repository, and the comments in both
+are mostly a record of what went wrong. The short version, for $arch:
+
+- PyInstaller ships **no bootloader** for this triple, and its sdist will not
+  build one for you — waf has to be run explicitly, and with the configure step
+  (\`waf distclean all\`; plain \`waf all\` exits successfully in milliseconds
+  having compiled nothing).
+- Under emulation, **gcc is the unreliable part**, not the code: it died in
+  \`cc1\` on s390x and in \`collect2\` on ppc64le. clang got through both.
+  Setting \`CC\` alone is not enough — \`LDSHARED\` drives setuptools' link step
+  and \`RUSTFLAGS -C linker\` drives rustc's, which otherwise calls plain \`cc\`.
+- \`docs/POC-CROSS-BUILDS.md\` argues that all of the above is better solved by
+  cross-building the native wheels on the host instead. If you are starting
+  fresh, start there.
+
+Bugs, including "it does not run on my $arch box":
+https://github.com/monikapurpl3/breeze-core/issues
+NOTES
+}
+
 TARGETS=("$@")
 [ ${#TARGETS[@]} -eq 0 ] && TARGETS=($ALL_MUSL mips64le)
 
 echo "proof-of-concept bundles for $VER ($COMMIT), one at a time"
 for t in "${TARGETS[@]}"; do
   case "$t" in
-    s390x|ppc64le) build_musl "$t" ;;
-    mips64le)      build_mips64le ;;
+    # build_musl returns 0 for an already-built bundle, so re-running this
+    # script stages a tarball for a bundle from an earlier session without
+    # rebuilding it.
+    s390x|ppc64le) build_musl "$t" && stage_tarball "$t" musl "$OUT/bundle-musl-$t" ;;
+    mips64le)      build_mips64le && stage_tarball mips64le glibc "$OUT/bundle-glibc-mips64le" ;;
     -h|--help)     usage; exit 0 ;;
     *)             echo "  unknown target: $t"; usage; exit 1 ;;
   esac
@@ -125,3 +245,12 @@ for d in "$OUT"/bundle-*/; do
   b="$d/breeze-core/breeze-core"
   [ -s "$b" ] && echo "  $(basename "$d"): $(du -sh "$d" | cut -f1)"
 done
+echo ""
+echo "== publishable tarballs (POC_DIR for packaging/repo/build-bsd-repo.sh) =="
+found=0
+for t in "$OUT"/*.tar.gz; do
+  [ -s "$t" ] || continue
+  found=1
+  echo "  $(basename "$t")  $(du -h "$t" | cut -f1)"
+done
+[ "$found" = 0 ] && echo "  (none yet)"
