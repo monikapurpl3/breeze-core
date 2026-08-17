@@ -47,24 +47,30 @@ echo "==> $ARCH via $IMAGE (commit $COMMIT, -j$JOBS, emulated=$EMULATED)" >&2
 tar -C "$REPO" -cf - meow_ac static setup_device.py requirements.txt \
     packaging/binary/launcher.py packaging/binary/breeze-core.spec \
   | MSYS_NO_PATHCONV=1 docker run -i --rm --cpus="$JOBS" \
+      --name "breeze-poc-$ARCH" \
       -e "POC_EMULATED=$EMULATED" \
+      -e "POC_CARGO_JOBS=${POC_CARGO_JOBS:-1}" \
       "$IMAGE" bash -c '
 set -eu
 exec 3>&1 1>&2          # keep fd 3 for the tar; everything else to stderr
 
 export TMPDIR="${TMPDIR:-$PREFIX/tmp}"; mkdir -p "$TMPDIR"
 
-# Serialise every native build when this container is emulated.
+# Throttle native builds when this container is emulated.
 #
 # qemu-user emulates guest threads, and its futex handling deadlocks under the
-# thread churn of a parallel cargo build: the arm64 attempt stopped dead in
-# pydantic-core'"'"'s "Installing build dependencies" (i.e. compiling maturin) with
-# six qemu-aarch64-static processes all in state S, 0.02% CPU, and no progress
-# ever again. It reads exactly like a slow build and is in fact a hang.
-# One job at a time is slower and it finishes.
+# thread churn of a parallel cargo build: the first arm64 attempt stopped dead
+# in pydantic-core'"'"'s "Installing build dependencies" (i.e. compiling maturin)
+# with six qemu-aarch64-static processes all in state S, 0.02% CPU, and no
+# progress ever again. It reads exactly like a slow build and is in fact a hang.
+#
+# POC_CARGO_JOBS is the dial. 1 is the safe floor; higher is a gamble worth
+# taking with poc-watchdog.sh running, since the watchdog turns "wedged for
+# hours" into "failed in five minutes".
 if [ "${POC_EMULATED:-0}" = "1" ]; then
-  export CARGO_BUILD_JOBS=1 MAKEFLAGS=-j1
-  echo "emulated target: cargo/make limited to one job to dodge the qemu futex deadlock"
+  cj="${POC_CARGO_JOBS:-1}"
+  export CARGO_BUILD_JOBS="$cj" MAKEFLAGS="-j$cj"
+  echo "emulated target: cargo/make limited to $cj job(s) — qemu futex deadlock territory"
 fi
 mkdir -p "$HOME/src" && cd "$HOME/src" && tar -xf -
 
