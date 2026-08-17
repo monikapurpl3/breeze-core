@@ -33,18 +33,39 @@ REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 COMMIT="$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown)"
 JOBS="${POC_JOBS:-$(( $(nproc 2>/dev/null || echo 4) / 2 ))}"
 
-echo "==> $ARCH via $IMAGE (commit $COMMIT, -j$JOBS)" >&2
+# Is this container going to run under QEMU? x86_64 Termux on an x86_64 host is
+# native and fast; aarch64 there is emulated, which changes what's safe inside.
+HOST_ARCH="$(uname -m)"
+case "$ARCH:$HOST_ARCH" in
+  x86_64:x86_64|aarch64:aarch64) EMULATED=0 ;;
+  *)                             EMULATED=1 ;;
+esac
+
+echo "==> $ARCH via $IMAGE (commit $COMMIT, -j$JOBS, emulated=$EMULATED)" >&2
 
 # Only what the build needs; the tarball goes in over stdin.
 tar -C "$REPO" -cf - meow_ac static setup_device.py requirements.txt \
     packaging/binary/launcher.py packaging/binary/breeze-core.spec \
   | MSYS_NO_PATHCONV=1 docker run -i --rm --cpus="$JOBS" \
-      -v breeze-termux-pip:/data/data/com.termux/files/home/.cache/pip \
+      -e "POC_EMULATED=$EMULATED" \
       "$IMAGE" bash -c '
 set -eu
 exec 3>&1 1>&2          # keep fd 3 for the tar; everything else to stderr
 
 export TMPDIR="${TMPDIR:-$PREFIX/tmp}"; mkdir -p "$TMPDIR"
+
+# Serialise every native build when this container is emulated.
+#
+# qemu-user emulates guest threads, and its futex handling deadlocks under the
+# thread churn of a parallel cargo build: the arm64 attempt stopped dead in
+# pydantic-core'"'"'s "Installing build dependencies" (i.e. compiling maturin) with
+# six qemu-aarch64-static processes all in state S, 0.02% CPU, and no progress
+# ever again. It reads exactly like a slow build and is in fact a hang.
+# One job at a time is slower and it finishes.
+if [ "${POC_EMULATED:-0}" = "1" ]; then
+  export CARGO_BUILD_JOBS=1 MAKEFLAGS=-j1
+  echo "emulated target: cargo/make limited to one job to dodge the qemu futex deadlock"
+fi
 mkdir -p "$HOME/src" && cd "$HOME/src" && tar -xf -
 
 # Termux ships clang, not gcc — which is lucky, because emulated gcc segfaults
