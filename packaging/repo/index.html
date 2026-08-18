@@ -459,7 +459,7 @@ Restart-Service BreezeCore
 
   <section id="poc" style="--c:var(--poc)">
     <h2>Proof of concept</h2>
-    <span class="who">s390x · ppc64le · MIPS · Termux — frozen at v3.0.5, for developers</span>
+    <span class="who">s390x · ppc64le · Termux · OpenWrt MIPS · Debian mips64el — frozen at v3.0.5, for developers</span>
     <p class="dim" style="margin-top:0"><b>These are not products.</b> They exist so that
       somebody porting Breeze Core to an unusual machine starts from a working build and a
       list of the walls we hit, instead of from scratch. They are <b>frozen at 3.0.5</b>, will
@@ -467,9 +467,10 @@ Restart-Service BreezeCore
       breaks, the interesting part is <i>how</i> — that's the whole point of publishing them.</p>
 
     <div class="note">
-      <b>Everything below was verified by running the built binary on the target</b> (under
-      emulation), not by a build exiting zero. Where something doesn't work, the entry says so
-      and says why.
+      <b>Everything here was verified by running it on the target</b> (under emulation), not by
+      a build exiting zero — installed, imported, and made to do real work. <b>One exception,
+      clearly labelled: the Octeon wheelhouse has never run.</b> It says so in its own heading,
+      in its filename, and in its NOTES.
     </div>
 
     <h3>Termux (Android) — works, no root</h3>
@@ -480,16 +481,24 @@ Restart-Service BreezeCore
 <pre><span class="c"># prebuilt — no compiler, no Rust, nothing to build on the phone</span>
 curl -fsSLO https://bolero.salataputarica.hr.eu.org/poc/breeze-core-3.0.5-termux-aarch64.tar.gz
 tar -xzf breeze-core-3.0.5-termux-aarch64.tar.gz
-./breeze-core/breeze-core version
+cd breeze-core-3.0.5-termux-aarch64
+./breeze-core version
 
 <span class="c"># it will be frozen by Android when the screen sleeps unless you say:</span>
 termux-wake-lock
-./breeze-core/breeze-core serve --host 0.0.0.0 --port 8420</pre>
-    <p class="dim">Prefer to build it yourself on the device? <code>packaging/termux/install.sh</code>
-      does a source install — but budget <b>15–40 minutes</b>, because pydantic-core is a Rust
-      extension with no Android wheel and compiles on the phone. Two things bite there and neither
-      error mentions Android: <code>maturin</code> needs <code>ANDROID_API_LEVEL</code> exported,
-      and PyInstaller runs <code>ldd</code>, which Android doesn't have.</p>
+./breeze-core serve --host 0.0.0.0 --port 8420</pre>
+    <p class="dim">Also available for <code>x86_64</code> (emulators, Android-on-PC). The arm64
+      build is the interesting one: it could not be built by emulation at all — qemu-user
+      deadlocks on the futex traffic of a parallel Rust build, twice — so pydantic-core is
+      <b>cross-compiled on a workstation in 55 seconds</b> and only the freeze step runs
+      emulated. Two Termux-specific traps, neither of which names itself: the
+      <code>termux-docker</code> image <b>discards <code>docker -e</code> variables</b> in its
+      entrypoint, and <code>pkg</code> picks a fresh mirror on every invocation regardless of
+      <code>sources.list</code> — use <code>apt-get</code>.</p>
+    <p class="dim">Prefer to build it on the device? <code>packaging/termux/install.sh</code>
+      does a source install — budget <b>15–40 minutes</b> for the Rust compile, and note that
+      <code>maturin</code> needs <code>ANDROID_API_LEVEL</code> exported and PyInstaller runs
+      <code>ldd</code>, which Android doesn't have.</p>
 
     <h3>s390x — works (musl)</h3>
     <p class="dim">Mainframes run air conditioning too, and a shop with a z-series has somewhere
@@ -497,7 +506,7 @@ termux-wake-lock
       needs a modern toolchain; verified running under emulated s390x.</p>
 <pre>curl -fsSLO https://bolero.salataputarica.hr.eu.org/poc/breeze-core-3.0.5-linux-musl-s390x.tar.gz
 tar -xzf breeze-core-3.0.5-linux-musl-s390x.tar.gz
-./bundle-musl-s390x/breeze-core/breeze-core version</pre>
+./breeze-core-3.0.5-linux-musl-s390x/breeze-core version</pre>
     <p class="dim"><b>Sharp edge worth knowing if you rebuild it:</b> emulated <b>gcc segfaults</b>
       (internal compiler error in cc1) partway through PyInstaller's bootloader on this
       architecture. clang gets through. And PyInstaller's own s390x wheel carries
@@ -505,31 +514,143 @@ tar -xzf breeze-core-3.0.5-linux-musl-s390x.tar.gz
       one with <code>waf distclean all</code> — note <code>distclean</code>, or waf reports
       success in 13 milliseconds having built nothing.</p>
 
-    <h3>ppc64le — in progress</h3>
+    <h3>ppc64le — works (musl)</h3>
     <p class="dim">Same recipe as s390x. There is real ppc64le kit in the world, and it is
       exactly the sort of machine that sits in a room that needs cooling.</p>
+<pre>curl -fsSLO https://bolero.salataputarica.hr.eu.org/poc/breeze-core-3.0.5-linux-musl-ppc64le.tar.gz
+tar -xzf breeze-core-3.0.5-linux-musl-ppc64le.tar.gz
+./breeze-core-3.0.5-linux-musl-ppc64le/breeze-core version</pre>
+    <p class="dim"><b>This one took three separate compiler knobs, and each looked like the
+      last one.</b> Emulated gcc segfaulted in <code>collect2</code> — the linker driver — while
+      linking pycryptodome. Setting <code>CC=clang</code> was not enough, because setuptools
+      takes its link command from <code>LDSHARED</code>; and that was still not enough, because
+      <b>rustc invokes plain <code>cc</code> and ignores <code>CC</code> entirely</b>, so
+      pydantic-core went down in the same segfault after everything else had built.
+      <code>RUSTFLAGS="-C linker=clang"</code> was the missing third.</p>
 
-    <h3>MIPS — a toolchain wall, and what we're doing about it</h3>
-    <p class="dim">MIPS deserves the honest version, because a lot of networking hardware is
-      MIPS and it would be easy to imply this works.</p>
+    <h3>OpenWrt MIPS — works (wheelhouses)</h3>
+    <p class="dim">This is the one that matters, because a great deal of networking hardware is
+      MIPS. Built against <b>OpenWrt's own SDK</b> — same musl, same soft-float ABI, same gcc
+      that built OpenWrt's python3 — rather than a generic musl toolchain that would only
+      approximate the target.</p>
+    <p class="dim"><b>Wheels, not a bundle, deliberately.</b> A frozen bundle is ~25&nbsp;MB
+      against 8–16&nbsp;MB of router flash. Wheels drop into an extroot or a chroot and give you
+      a working environment to develop against real hardware — which is the point of this whole
+      section.</p>
     <ul class="dim">
-      <li><b>Rust demoted every MIPS Linux target to tier 3.</b> No prebuilt <code>std</code>,
-        no official builds. FastAPI needs pydantic v2, whose core is Rust — so the options are a
-        distro-provided <code>rustc</code> that was bootstrapped for the architecture, building
-        <code>std</code> yourself with a nightly <code>-Z build-std</code>, or not at all.</li>
-      <li><b>32-bit is worse than 64-bit.</b> The usual container emulators register
-        <code>mips64</code>/<code>mips64le</code> only. o32 <code>mipsel</code> images get
-        dispatched to the n32 handler and rejected outright — and 32-bit mipsel is precisely
-        what most small routers are.</li>
+      <li><code>openwrt-mips_24kc</code> — <b>big-endian</b>. ath79: TP-Link Archer C7 /
+        WDR3600 / WDR4300, GL.iNet AR150 / AR300M, older Netgear WNDR37xx.</li>
+      <li><code>openwrt-mipsel_24kc</code> — little-endian. ramips: MediaTek MT7620 / MT7621.</li>
     </ul>
-    <p class="dim">So for MIPS the deliverable is planned as a <b>wheelhouse</b> rather than a
-      bundle: the compiled wheels (pydantic-core, pycryptodome, brotli) plus an offline
-      <code>pip install</code>. That skips the part a developer genuinely can't stomach — the
-      Rust compile under emulation — without pretending there's a drop-in binary.</p>
+<pre><span class="c"># pick the one that matches your router's endianness — see the warning below</span>
+curl -fsSLO https://bolero.salataputarica.hr.eu.org/poc/breeze-core-3.0.5-openwrt-mips_24kc-wheelhouse.tar.gz
+tar -xzf breeze-core-3.0.5-openwrt-mips_24kc-wheelhouse.tar.gz
+cd breeze-core-3.0.5-openwrt-mips_24kc-wheelhouse
+
+<span class="c"># everything except pydantic-core comes from the feed</span>
+opkg update
+opkg install python3 python3-pip python3-cryptodome
+
+<span class="c"># --only-binary matters: without it a tag mismatch silently starts</span>
+<span class="c"># compiling Rust on a router, which is not a thing that finishes</span>
+pip install --find-links . --only-binary pydantic-core pydantic-core
+pip install fastapi uvicorn msmart-ng brotli-asgi</pre>
+    <div class="note">
+      <b>⚠ Do not mix the two wheelhouses.</b> On 32-bit MIPS the wheel <b>filenames are
+      identical</b> — <code>uname -m</code> reports <code>mips</code> for both endiannesses — so
+      the big- and little-endian files are different content under the same name. Keep them
+      apart. If you do get it wrong it fails safely: the extension module inside carries the
+      full multiarch string (<code>mips-linux-muslsf</code> vs
+      <code>mipsel-linux-muslsf</code>), so the wrong one raises <code>ImportError</code>
+      instead of executing byte-swapped machine code.
+    </div>
+    <p class="dim"><b>Four things OpenWrt does differently, if you're porting something else.</b>
+      The extension suffix does not match what maturin emits — OpenWrt CPython wants
+      <code>.cpython-311-mips-linux-musl<b>sf</b>.so</code> and maturin produces
+      <code>…-musl.so</code>, so the wheel installs cleanly and then won't import.
+      There is <b>no libpython</b>, and sysconfigdata ships as a <code>.pyc</code> only (the
+      <code>.py</code> is stripped to save flash), so pyo3's cross-detection has nothing to
+      parse — use an explicit <code>PYO3_CONFIG_FILE</code>.
+      <b><code>libc</code> is not installable from any feed</b>: musl is baked into the firmware
+      image, so <code>Depends: libc</code> is satisfied by the base system.
+      And <b><code>python3-light</code> is not the stdlib</b> — <code>decimal</code>, which
+      pydantic-core imports at module scope, is a separate package, so install the
+      <code>python3</code> meta-package.</p>
+
+    <h3>Debian mips64el — works (glibc wheelhouse)</h3>
+    <p class="dim"><b>Not for routers</b> — if that's what you're here for, use the OpenWrt
+      wheelhouses above; nothing here will load on OpenWrt. This is glibc, little-endian, 64-bit
+      MIPS: Loongson 3 machines, Cavium boxes running Debian, and the rest of the Debian mips64el
+      port. Requires CPython 3.11 (bookworm's python3) — a non-abi3 extension is bound to one
+      minor version.</p>
+<pre>curl -fsSLO https://bolero.salataputarica.hr.eu.org/poc/breeze-core-3.0.5-linux-glibc-mips64el-wheelhouse.tar.gz
+tar -xzf breeze-core-3.0.5-linux-glibc-mips64el-wheelhouse.tar.gz
+cd breeze-core-3.0.5-linux-glibc-mips64el-wheelhouse
+pip install --find-links . --only-binary pydantic-core pydantic-core</pre>
+    <p class="dim">Published with a caveat about its own existence: it was built <i>first</i>, on
+      the way to the OpenWrt targets, when "generic musl MIPS" had quietly drifted into
+      "whatever MIPS base image exists" — Alpine has no MIPS port, so Debian's mips64el was the
+      convenient one, and it produced a glibc artifact for an architecture that is not where the
+      MIPS install base actually is. It stays because it's genuinely useful to someone on that
+      port, and because it's where the tier-3 Rust toolchain and the Debian multiarch traps got
+      worked out before OpenWrt inherited the answers. The least obvious of those: after
+      <code>dpkg --add-architecture</code>, apt will satisfy <code>gcc</code>'s
+      <code>libc6-dev</code> dependency with the <b>foreign</b> architecture and leave you a host
+      compiler that cannot link anything. Use <code>libc6-dev-&lt;arch&gt;-cross</code>.</p>
+
+    <h3>Octeon (mips64_octeonplus) — ⚠ UNVERIFIED, and we want your result</h3>
+    <p class="dim">Big-endian 64-bit MIPS, n64 ABI, soft-float musl — the Cavium Octeon family,
+      i.e. Ubiquiti EdgeRouter Lite / PoE / 8. <b>This is the one artifact here that has never
+      been run.</b> It compiles cleanly and inspects correctly (ELF 64-bit MSB, MIPS64 rel2,
+      right extension suffix), but the emulated interpreter dies with <b>SIGILL before the wheel
+      is ever reached</b> — so nothing about the wheel itself is demonstrated, in either
+      direction.</p>
+    <p class="dim">Partial diagnosis, so you don't start from zero: OpenWrt builds this
+      architecture with <code>-march=octeon+</code>, and qemu's default generic MIPS64R2 model
+      doesn't implement those instructions, so <code>QEMU_CPU=Octeon68XX</code> is required —
+      without it even a trivial binary faults. <b>With</b> it, a statically linked Octeon binary
+      from the same SDK runs correctly, while the dynamically linked OpenWrt interpreter still
+      faults. Necessary but not sufficient; the static/dynamic difference is unexplained.</p>
+<pre><span class="c"># on a real EdgeRouter — extroot or USB strongly recommended</span>
+opkg update &amp;&amp; opkg install python3 python3-pip python3-cryptodome
+curl -fsSLO https://bolero.salataputarica.hr.eu.org/poc/breeze-core-3.0.5-openwrt-mips64_octeonplus-wheelhouse-UNVERIFIED.tar.gz
+tar -xzf breeze-core-3.0.5-openwrt-mips64_octeonplus-wheelhouse-UNVERIFIED.tar.gz
+cd breeze-core-3.0.5-openwrt-mips64_octeonplus-wheelhouse-UNVERIFIED
+pip install --find-links . --only-binary pydantic-core pydantic-core
+
+python3 -c 'from pydantic_core import SchemaValidator
+v = SchemaValidator({"type": "float", "ge": 16, "le": 30})
+print("accepts:", v.validate_python(22.5))
+try:  v.validate_python(99.0); print("FAIL: 99.0 not rejected")
+except Exception as e: print("rejects 99.0:", type(e).__name__)'</pre>
+    <p class="dim">Three outcomes, all worth reporting to
+      <a href="https://github.com/monikapurpl3/breeze-core/issues">the issue tracker</a>:
+      it <b>prints both lines</b> → the wheel is fine and the problem was purely qemu's Octeon
+      emulation, and this entry gets promoted;
+      <b><code>ImportError</code></b> → the extension suffix doesn't match your python3, so send
+      <code>python3 -c 'import sysconfig; print(sysconfig.get_config_var("EXT_SUFFIX"))'</code>
+      and it can be renamed inside the wheel;
+      <b>illegal instruction on the device itself</b> → the build targets instructions your CPU
+      lacks, and the fix is a narrower <code>-march</code>.</p>
+
+    <h3>Why MIPS is wheels rather than a bundle</h3>
+    <p class="dim">Two reasons, and neither is laziness. <b>Flash:</b> a frozen bundle is ~25 MB
+      and a router has 8–16 MB. <b>Rust:</b> every MIPS Linux target is <b>tier 3</b> — no
+      prebuilt <code>std</code> — so it has to be built from source with a nightly
+      <code>-Z build-std</code>. That is also why cross-compiling isn't an optimisation here but
+      the only route at all: Debian mips64el ships <b>rustc 1.63</b> and pydantic-core needs
+      <b>≥ 1.88</b>, so "just compile it on the target" cannot succeed, emulated or otherwise.</p>
+    <p class="dim">One more thing worth recording, since it's easy to assume otherwise:
+      <b>there is no 64-bit little-endian MIPS in OpenWrt.</b> Of eight MIPS package
+      architectures the only 64-bit one is <code>mips64_octeonplus</code>, and it's big-endian.
+      Big-endian MIPS is not a curiosity — ath79 is probably the most common MIPS router target
+      there is.</p>
 
     <p class="dim" style="margin-top:18px"><a href="/poc/"><b>⬇ browse /poc/</b></a> ·
       every file has a <code>.sha256</code> beside it ·
-      built from the <a href="/src/">v3.0.5 source</a></p>
+      each tarball carries a <code>NOTES.md</code> with the full account ·
+      built from the <a href="/src/">v3.0.5 source</a> ·
+      reasoning in <a href="https://github.com/monikapurpl3/breeze-core/blob/main/docs/POC-CROSS-BUILDS.md">POC-CROSS-BUILDS.md</a></p>
   </section>
 
   <footer>

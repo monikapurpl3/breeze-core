@@ -17,6 +17,18 @@ TS="$(date +%Y%m%d-%H%M%S)"
 
 [ -f "$OUT/index.html" ] || { echo "no repo tree — run build-repo.sh first"; exit 1; }
 
+# Refuse to publish an UNRENDERED template. packaging/repo/index.html is a
+# template containing @VERSION@, which build-repo.sh substitutes with sed on its
+# way into $OUT. Copying the template straight into $OUT bypasses that and puts
+# a page reading "v@VERSION@" on the public site -- which is what happened once,
+# and which nothing else here would have caught.
+if grep -rl '@[A-Z_]\+@' "$OUT" --include='*.html' >/dev/null 2>&1; then
+  echo "PUBLISH ABORTED: unrendered placeholders in $OUT:"
+  grep -rn '@[A-Z_]\+@' "$OUT" --include='*.html' | head -5 | sed 's/^/  /'
+  echo "  (render with: sed \"s/@VERSION@/\$VER/g\" packaging/repo/index.html > $OUT/index.html)"
+  exit 1
+fi
+
 # build-repo.sh does its signing inside containers running as root, so parts of
 # the tree come back root-owned and mode 600 — including the copied *public*
 # keys. Left alone that bites twice: tar can't read them (so the upload aborts
