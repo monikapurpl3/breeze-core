@@ -139,10 +139,11 @@ this on".
 
 - **`msmart-ng` is not the constraint here.** All three options sit above the
   existing API surface, so none of them requires touching device I/O.
-- **The scheduler already proved the seam.** `devices/control.py:apply_to_unit`
-  is shared by the HTTP route and the scheduler; a bridge would be the third
-  caller, and keeping all three on one path is the reason that extraction was
-  worth doing.
+- **The seam is already proven three times over.**
+  `devices/control.py:apply_to_unit` is called by `api/units.py`, `api/programs.py`
+  and `programs/scheduler.py`. A bridge would be the fourth caller, which is the
+  whole payoff of having extracted it: voice, schedules, curves and HTTP all
+  converge on one control path with one set of bounds checks.
 - **Authentication does not map onto voice.** The device-pairing model (API key
   plus a per-device Ed25519 credential, admin-approved on the LAN) has no
   equivalent in HAP or Matter, which have their own pairing. A bridge is
