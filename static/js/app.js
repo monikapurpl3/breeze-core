@@ -13,6 +13,7 @@ import {
 import { tempUnit, toggleTempUnit, beepEnabled, toggleBeep } from "./display.js";
 import { initPalette, buildPalettePicker } from "./theme.js";
 import { nerdDialog } from "./nerd.js";
+import { programsDialog } from "./programs.js";
 
 // Polling is now the FALLBACK, not the mechanism. The server pushes state on
 // /api/units/stream; this interval only runs when that stream is unavailable
@@ -240,6 +241,16 @@ function wireHeader(){
     paint(beepEnabled());
     beep.addEventListener("click", () => paint(toggleBeep()));
   }
+  const progs = document.getElementById("programsBtn");
+  if(progs) progs.addEventListener("click", () => {
+    // Hand over the live panel state so "save a favourite from a unit" can use
+    // what is actually on screen rather than re-fetching it.
+    programsDialog(Object.values(panels).map(p => ({
+      id: p.id,
+      name: (p.state && p.state.name) || p.id,
+      state: p.state,
+    })));
+  });
   const nerd = document.getElementById("nerdBtn");
   if(nerd) nerd.addEventListener("click", nerdDialog);
 

@@ -514,3 +514,22 @@ body{
 }
 /* Beep toggle reads as "armed" when on — the icon alone is easy to misread. */
 #beepToggle.on{ color: var(--accent, #6ea8fe); }
+
+/* ── Programs panel ────────────────────────────────────────────────────────── */
+.prog-status{ margin: -6px 0 10px; font-size: 0.8rem; }
+.prog-item{
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(128,128,128,0.15);
+}
+.prog-head{ display:flex; justify-content:space-between; gap:10px; align-items:baseline; }
+.prog-name{ font-weight: 600; }
+/* A disabled program still shows, but should not read as active. */
+.prog-off{ opacity: 0.55; text-decoration: line-through; }
+.prog-meta{ font-size: 0.75rem; color:#9aa0a6; text-align:right; }
+.prog-summary{ font-size: 0.85rem; color:#c9cdd2; margin-top: 2px; }
+.prog-entries{ margin: 6px 0 2px 10px; padding-left: 10px; border-left: 2px solid rgba(128,128,128,0.25); }
+.prog-entry{ font-size: 0.78rem; color:#9aa0a6; font-variant-numeric: tabular-nums; padding: 1px 0; }
+.prog-actions{ display:flex; gap:8px; flex-wrap:wrap; margin-top: 6px; }
+.prog-actions .ghost-btn{ font-size: 0.78rem; padding: 3px 8px; }
+.prog-pick{ display:flex; flex-direction:column; gap:6px; margin: 8px 0; }
+.prog-pick .ghost-btn{ text-align:left; }
