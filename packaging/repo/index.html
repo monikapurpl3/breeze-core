@@ -233,14 +233,9 @@ opkg update &amp;&amp; opkg install breeze-core</pre>
        your own: about <b>24 MB to fetch, ~51–63 MB installed</b> (a private Python runtime and every
        dependency, so there's nothing else to install). That means x86 boxes, NAS/RPi-class devices, or a
        router with <a href="https://openwrt.org/docs/guide-user/additional-software/extroot_configuration">extroot</a>.</p>
-    <div class="note joke"><b>No mips build — a genuinely mipsed opportunity.</b> 🥁 Two hard walls, not
-      laziness. The packages wrap a self-contained Python bundle built on <b>Alpine</b>, and Alpine
-      publishes no mips images at all (386, amd64, arm, arm64, ppc64le, s390x, and riscv64 since 3.20 —
-      never <code>mips_24kc</code> or <code>mipsel_24kc</code>), so there is nothing to build the musl
-      bundle <i>on</i>; and PyInstaller cannot cross-compile — it has to run on the target architecture.
-      Even past that, a typical mips router has 8–16 MB of flash, which loses to a 24 MB download before
-      you even reach the 51 MB installed. A small x86/ARM64 box beside the router beats fighting the flash;
-      or build from source with the <a href="/src/">source tarball</a> if the device has real storage.</div>
+    <div class="note joke"><b>No mips <i>package</i> — but the opportunity is no longer mipsed.</b> 🥁 There is now a <a href="#poc">MIPS wheelhouse</a> for OpenWrt — big-endian <code>mips_24kc</code> (ath79) and little-endian <code>mipsel_24kc</code> (ramips), built against OpenWrt’s own SDK and verified on a real router userland.
+      What there still is <i>not</i> is an <code>.ipk</code>, for reasons that have not changed: the packages wrap a self-contained Python bundle, <b>PyInstaller cannot cross-compile</b> — it has to run on the target — and Alpine publishes no mips images to run it on (386, amd64, arm, arm64, ppc64le, s390x, and riscv64 since 3.20 — never <code>mips_24kc</code> or <code>mipsel_24kc</code>).
+      And even past that, a typical mips router has 8–16 MB of flash, which loses to a 24 MB download before you reach the 51 MB installed. That is exactly why the MIPS deliverable is <b>wheels you pip-install into an extroot</b> rather than a bundle. A small x86/ARM64 box beside the router still beats fighting the flash.</div>
     <div class="note"><b>RISC-V is here.</b> <code>riscv64</code> ships as a <b>musl</b> build — install it
       from the <a href="#alpine">Alpine</a> section above, same as any other arch. Expect it to land
       <b>last of any architecture</b> on future releases and to lag the version at the top of this page:
@@ -663,7 +658,7 @@ except Exception as e: print("rejects 99.0:", type(e).__name__)'</pre>
     <a href="/winget/">winget manifests</a><br>
     <b>Android:</b> <a href="/android/breeze-latest.apk">breeze-latest.apk</a> ·
     <a href="/android/">all versions</a><br>
-    <b>Source:</b> <a href="/src/">source tarballs</a> — for OpenBSD, mips, and any from-source install ·
+    <b>Source:</b> <a href="/src/">source tarballs</a> — for OpenBSD and any from-source install (mips now has a <a href="#poc">wheelhouse</a>) ·
     <b>Other distros</b> (Void, Gentoo, Slackware, NixOS…) → tarballs, ebuild, PKGBUILD, xbps template and a
     Nix flake on <a href="https://github.com/monikapurpl3/breeze-core/blob/main/docs/PACKAGES.md">GitHub</a><br>
     <b>Browse:</b> <a href="/deb/">deb</a> · <a href="/rpm/">rpm</a> · <a href="/arch/">arch</a> ·
