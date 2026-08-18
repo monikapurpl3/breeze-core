@@ -37,6 +37,40 @@ The repo's [`CLAUDE.md`](CLAUDE.md) documents the architecture and the load-bear
 - **Strict CSP** in the UI: keep CSS in `styles.css` and JS in modules — no inline styles/scripts.
 - Keep [`HARDENING.md`](HARDENING.md) in sync when you change auth, settings, middleware, or the systemd unit.
 
+## Which ports get rebuilt for a release
+
+Not every port is rebuilt every time, and the tiers are deliberate — a release is
+not blocked on the exotic ones.
+
+**Tier 1 — every release, in this order.** The order matters: the first two cover
+almost every real install, so they go out first and the rest follow.
+
+1. `nfpm` packages (deb/rpm/apk/pacman) for **x86_64 + arm64**, plus the tarballs
+   and the signed repo — `packaging/nfpm/build-packages.sh`, then
+   `packaging/repo/build-repo.sh` and `publish.sh`.
+2. **Windows** installer + winget manifests — `deploy/windows/build-installer.ps1`.
+3. **BSD** — FreeBSD `.pkg` and NetBSD binary package, built on the VMs
+   (`packaging/repo/build-bsd-repo.sh` stages them).
+4. **OpenWrt** `.ipk` feed.
+
+**Tier 2 — occasionally.** **Termux** (Android): every major version, or every
+other. It is cheap now that pydantic-core is cross-compiled rather than built
+under emulation (`packaging/termux/`), but it is not release-blocking.
+
+**Tier 3 — frozen unless something major changes.** The proof-of-concept
+architectures — MIPS (OpenWrt + Debian), ppc64le, s390x — stay at whatever
+version they were last built for, and the published artifacts say so plainly.
+They are developer aids, not a support commitment. Recipes and every trap:
+[docs/POC-CROSS-BUILDS.md](docs/POC-CROSS-BUILDS.md).
+
+**Planned, not started: OPNsense as a first-class port.** Worth noting that the
+groundwork is already done — OPNsense is FreeBSD-based and consumes FreeBSD
+packages, so the existing signed FreeBSD `.pkg` is most of the way there. What is
+actually missing is the OPNsense-specific part: a plugin with its own GUI page and
+config integration, and conformance to their repository/plugin conventions. That
+is a different kind of work from the porting above, which is why it is separate
+rather than a fifth item in tier 1.
+
 ## Security
 
 Please report vulnerabilities privately — see [SECURITY.md](SECURITY.md). Don't open a public issue for them.
