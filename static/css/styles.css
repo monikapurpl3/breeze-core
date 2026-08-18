@@ -459,3 +459,58 @@ body{
   font-size: 12px;
   color: var(--bad);
 }
+
+/* ── Nerd panel ────────────────────────────────────────────────────────────
+   Reuses the enroll overlay/card so there is one modal look, but needs to be
+   taller and scrollable: /api/system is long by design. */
+.nerd-card{ max-width: 720px; width: 100%; }
+.nerd-body{
+  max-height: 60vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;   /* don't scroll the page behind the modal */
+  text-align: left;
+}
+.nerd-section{ margin-bottom: 14px; }
+.nerd-section h3{
+  margin: 0 0 6px;
+  font-size: 0.95rem;
+  text-transform: capitalize;
+  color: var(--accent, #6ea8fe);
+}
+.nerd-row{
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 3px 0;
+  font-size: 0.85rem;
+  border-bottom: 1px solid rgba(128,128,128,0.12);
+}
+.nerd-k{ color: #9aa0a6; text-transform: capitalize; }
+.nerd-v{
+  text-align: right;
+  /* Values are IPs, paths, versions and hashes: let them wrap anywhere rather
+     than forcing the modal to scroll sideways. */
+  word-break: break-word;
+  font-variant-numeric: tabular-nums;
+}
+.nerd-sub{
+  margin: 6px 0 6px 10px;
+  padding-left: 10px;
+  border-left: 2px solid rgba(128,128,128,0.25);
+}
+.nerd-subtitle{
+  font-size: 0.8rem;
+  color: #9aa0a6;
+  text-transform: capitalize;
+  margin: 4px 0 2px;
+}
+.nerd-raw{
+  max-height: 30vh;
+  overflow: auto;
+  font-size: 0.72rem;
+  background: rgba(128,128,128,0.10);
+  padding: 8px;
+  border-radius: 6px;
+}
+/* Beep toggle reads as "armed" when on — the icon alone is easy to misread. */
+#beepToggle.on{ color: var(--accent, #6ea8fe); }

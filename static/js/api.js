@@ -52,3 +52,57 @@ export async function apiFetch(path, opts = {}){
   if(token) headers["Authorization"] = "Bearer " + token;
   return fetch(path, Object.assign({}, opts, {headers}));
 }
+
+// Consume a Server-Sent Events endpoint — deliberately over fetch(), NOT
+// EventSource.
+//
+// EventSource cannot send custom request headers. It is the obvious tool for
+// SSE and it is unusable here: this UI authenticates with *two* headers
+// (X-API-Key and Authorization), so `new EventSource("/api/units/stream")`
+// arrives unauthenticated and 401s forever, with no way to attach either
+// credential. Some projects work around that by putting a token in the query
+// string; that would end up in access logs and in the referrer, which is a poor
+// trade for a secret that controls someone's house.
+//
+// So: fetch() with a streaming body reader, which keeps both headers and keeps
+// every request going through this module, per the rule at the top of the file.
+//
+// Returns the Response so the caller can branch on status the same way it does
+// for apiFetch — 401 means re-pair, 404 means an older server with no stream
+// route and the caller should fall back to polling. onEvent is called with
+// (eventName, dataString) per frame; keepalive comments are skipped.
+export async function apiStream(path, { onEvent, onOpen, signal } = {}){
+  const res = await apiFetch(path, {
+    signal,
+    headers: {"Accept": "text/event-stream"},
+    cache: "no-store",
+  });
+  if(!res.ok || !res.body) return res;
+  if(onOpen) onOpen();
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  for(;;){
+    const { value, done } = await reader.read();
+    if(done) break;
+    // Normalise CRLF so frame splitting works regardless of what the proxy did.
+    buf += decoder.decode(value, {stream: true}).replace(/\r\n/g, "\n");
+    let cut;
+    // A frame ends at a blank line. Anything still in buf is a partial frame —
+    // a chunk boundary can land mid-frame, so it has to be carried over.
+    while((cut = buf.indexOf("\n\n")) >= 0){
+      const frame = buf.slice(0, cut);
+      buf = buf.slice(cut + 2);
+      let name = "message";
+      const data = [];
+      for(const line of frame.split("\n")){
+        if(line === "" || line.startsWith(":")) continue;  // keepalive comment
+        if(line.startsWith("event:")) name = line.slice(6).trim();
+        else if(line.startsWith("data:")) data.push(line.slice(5).replace(/^ /, ""));
+      }
+      if(data.length && onEvent) onEvent(name, data.join("\n"));
+    }
+  }
+  return res;
+}

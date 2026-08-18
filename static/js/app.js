@@ -1,21 +1,30 @@
 // app.js — the entry module: ensures this device is paired, loads units,
-// wires each card's control callback to the API, and runs the poll loop.
+// wires each card's control callback to the API, and keeps state live.
 // It's the only module that combines transport (api.js), pairing
 // (enroll.js), and rendering (unit-card.js).
 
-import { apiFetch, clearDeviceToken } from "./api.js";
+import { apiFetch, apiStream, clearDeviceToken } from "./api.js";
 import { buildPanel, render, setError, setName } from "./unit-card.js";
 import { enroll } from "./enroll.js";
 import {
   addUnitDialog, renameDialog, confirmDialog, addSourceDialog, scanDialog,
   apiAddUnit, apiRenameUnit, apiDeleteUnit,
 } from "./manage.js";
-import { tempUnit, toggleTempUnit } from "./display.js";
+import { tempUnit, toggleTempUnit, beepEnabled, toggleBeep } from "./display.js";
 import { initPalette, buildPalettePicker } from "./theme.js";
+import { nerdDialog } from "./nerd.js";
 
+// Polling is now the FALLBACK, not the mechanism. The server pushes state on
+// /api/units/stream; this interval only runs when that stream is unavailable
+// (older server, proxy that buffers SSE, or a stream that keeps dropping).
 const POLL_INTERVAL_MS = 5000;
+const STREAM_RETRY_MS = 3000;      // backoff after a stream drops
+const STREAM_RETRY_MAX_MS = 30000;
 const panels = {}; // unit id -> panel object
 let reauthing = false;
+let streamAbort = null;    // AbortController for the live stream, if open
+let streamRetry = STREAM_RETRY_MS;
+let pollTimer = null;      // only non-null while falling back to polling
 
 // A 401 on a normally-authorized request means the device token is
 // missing/expired. Clear it and re-run pairing; because apiFetch reads
@@ -34,10 +43,14 @@ async function control(p, body){
   if(p.pending) return;
   p.pending = true;
   try{
+    // beep rides along on every control call, injected here rather than at each
+    // call site — there are a dozen of those (mode, fan, swing, temp, power,
+    // eco, turbo) and one of them would eventually be forgotten. The server
+    // treats absent-or-false as silent, so sending it explicitly is harmless.
     const res = await apiFetch(`/api/units/${p.id}/control`, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify(body)
+      body: JSON.stringify(Object.assign({beep: beepEnabled()}, body))
     });
     if(res.status === 401){ setError(p, "session expired — re-pairing…"); reauth(); return; }
     if(!res.ok) throw new Error(await res.text());
@@ -217,6 +230,19 @@ function wireHeader(){
       rerenderAll();
     });
   }
+  const beep = document.getElementById("beepToggle");
+  if(beep){
+    const paint = (on) => {
+      beep.textContent = on ? "🔔" : "🔕";
+      beep.classList.toggle("on", on);
+      beep.title = on ? "Units chirp on each command" : "Units stay silent";
+    };
+    paint(beepEnabled());
+    beep.addEventListener("click", () => paint(toggleBeep()));
+  }
+  const nerd = document.getElementById("nerdBtn");
+  if(nerd) nerd.addEventListener("click", nerdDialog);
+
   const add = document.getElementById("addUnitBtn");
   if(add) add.addEventListener("click", doAddUnit);
   const emptyAdd = document.getElementById("emptyAddBtn");
@@ -252,18 +278,104 @@ async function init(){
   if(units === null) return;
   buildGrid(units);
 
-  // Skip poll ticks while re-pairing (each tick would 401 for every panel —
-  // enough to trip a server-side fail2ban jail) and while the tab is hidden.
-  const poll = () => {
+  // One state read up front so the cards are populated immediately — the stream
+  // only sends a unit when something changes, so waiting for it would leave the
+  // panels blank until someone touched a remote.
+  await fetchAllStates();
+
+  document.addEventListener("visibilitychange", () => {
+    if(document.hidden){
+      // Closing the stream is not just tidiness. The server polls the units
+      // centrally ONLY while at least one stream is open, so hanging up means a
+      // backgrounded tab stops causing LAN traffic to the air conditioners
+      // entirely — where the old 5s poll merely skipped ticks while leaving the
+      // next one queued.
+      stopLive();
+    }else{
+      fetchAllStates();   // catch up on whatever changed while hidden
+      startLive();
+    }
+  });
+  startLive();
+}
+
+// ── keeping state live ──────────────────────────────────────────────────────
+// Preference order: the SSE stream, falling back to polling. The fallback is
+// not decoration — a reverse proxy that buffers responses will happily accept
+// the stream and then deliver nothing, and an older server has no stream route
+// at all.
+
+function stopPolling(){
+  if(pollTimer){ clearInterval(pollTimer); pollTimer = null; }
+}
+
+function startPolling(why){
+  if(pollTimer) return;
+  console.info("breeze: live stream unavailable (" + why + ") — polling every " +
+               (POLL_INTERVAL_MS / 1000) + "s");
+  // Skip ticks while re-pairing: one tick would 401 once per panel, which is
+  // enough to trip a server-side fail2ban jail.
+  const tick = () => {
     if(reauthing || document.hidden) return;
     if(Object.keys(panels).length === 0) return;
     fetchAllStates();
   };
-  document.addEventListener("visibilitychange", () => {
-    if(!document.hidden) poll();
-  });
-  poll();
-  setInterval(poll, POLL_INTERVAL_MS);
+  pollTimer = setInterval(tick, POLL_INTERVAL_MS);
+}
+
+function stopLive(){
+  if(streamAbort){ streamAbort.abort(); streamAbort = null; }
+  stopPolling();
+}
+
+async function startLive(){
+  if(streamAbort || document.hidden) return;
+  const ctl = new AbortController();
+  streamAbort = ctl;
+  let opened = false;
+  try{
+    const res = await apiStream("/api/units/stream", {
+      signal: ctl.signal,
+      onOpen: () => {
+        opened = true;
+        streamRetry = STREAM_RETRY_MS;   // healthy connection resets the backoff
+        stopPolling();                    // stream wins; stop double-reading
+        setGlobalStatus("");
+      },
+      onEvent: (name, data) => {
+        if(name !== "state") return;
+        let s;
+        try{ s = JSON.parse(data); }catch(_){ return; }
+        const p = panels[s.id];
+        if(p){ render(p, s); setError(p, null); }
+      },
+    });
+    if(res.status === 401){ reauth(); return; }
+    if(res.status === 404 || res.status === 405){
+      // Older server: no stream route. Poll for the rest of the session and do
+      // not keep retrying something that will never appear.
+      streamAbort = null;
+      startPolling("server has no /api/units/stream");
+      return;
+    }
+    if(!res.ok){ throw new Error("HTTP " + res.status); }
+    // Fell out of the read loop: the server closed the stream (restart, or a
+    // proxy idle timeout). Reconnect.
+  }catch(e){
+    if(ctl.signal.aborted) return;        // we closed it on purpose
+    if(!opened) startPolling(e.message);  // never got a frame — assume no SSE
+  }
+  streamAbort = null;
+  if(document.hidden) return;
+  // Reconnect with backoff, polling in the meantime so the UI is never frozen.
+  startPolling("reconnecting");
+  streamRetry = Math.min(streamRetry * 2, STREAM_RETRY_MAX_MS);
+  setTimeout(startLive, streamRetry);
+}
+
+function setGlobalStatus(text){
+  const el = document.getElementById("globalStatus");
+  if(el) el.textContent = text;
 }
 
 init();
