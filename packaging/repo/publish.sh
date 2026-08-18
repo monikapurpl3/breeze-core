@@ -35,6 +35,28 @@ fi
 # half-way) and anything that does land is unreadable by the web server (403 on
 # breeze-core.asc, i.e. no apt/dnf/pacman user can verify the repo). Normalise
 # before shipping, and again after extraction so the served tree is world-readable.
+# Refuse to publish a tree that is MISSING sections the landing page links to.
+#
+# publish.sh uploads the whole tree and swaps `current`, so anything absent
+# locally VANISHES from the live site -- there is no merge. That is exactly how
+# /android/, /windows/, /winget/ and /src/ came to 404 for a while: a republish
+# done to add the /poc/ section shipped a tree that had never staged the others,
+# and nothing noticed because the smoke check only tested / and the GPG key.
+#
+# So: pull every root-relative link out of index.html and check it exists.
+missing=""
+for link in $(grep -oE 'href="/[^"#]*"' "$OUT/index.html" | sed 's/href="//;s/"$//' | sort -u); do
+  target="$OUT${link%/}"
+  [ -e "$target" ] || [ -e "$OUT$link" ] || missing="$missing $link"
+done
+if [ -n "$missing" ]; then
+  echo "PUBLISH ABORTED: index.html links to paths that are not in $OUT:"
+  for m in $missing; do echo "  $m"; done
+  echo "  Re-stage them before publishing. The optional ones need env vars:"
+  echo "    ANDROID_APK=... WINDOWS_EXE=... POC_DIR=... ./packaging/repo/build-bsd-repo.sh"
+  exit 1
+fi
+
 echo "=== normalising ownership/permissions ==="
 if [ -n "$(find "$OUT" ! -readable -print -quit 2>/dev/null)" ]; then
   sudo chown -R "$(id -un):$(id -gn)" "$OUT"

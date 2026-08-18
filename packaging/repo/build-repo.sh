@@ -13,6 +13,7 @@
 #   ├── arch/    {x86_64,aarch64}/breeze-core.db…  (pacman, signed db + pkgs)
 #   └── alpine/  {x86_64,aarch64}/APKINDEX.tar.gz  (apk, RSA-signed index)
 set -euo pipefail
+set -o pipefail   # drun pipes docker into tar; do not lose docker's status
 
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$REPO"
@@ -25,7 +26,61 @@ APK_KEY_NAME="breeze-core@bolero"
 
 MOUNT="$REPO"
 case "$MOUNT" in /[a-z]/*) MOUNT="$(echo "$MOUNT" | sed -E 's#^/([a-z])/#\U\1:/#')" ;; esac
-drun() { MSYS_NO_PATHCONV=1 docker run -i --rm -v "$MOUNT:/work" -w /work "$@"; }
+# Every containerised stage goes through this one helper, so it is also the one
+# place that has to cope with Docker Desktop on this machine refusing to
+# bind-mount the checkout at all ("the path ... is not shared from the host"),
+# and previously presenting a mount as silently empty. With -v it did not even
+# fail cleanly: the apt stage hung with no output and no container.
+#
+# So stream instead. Each call tars in exactly what the stages read (the built
+# packages, the signing keys, and whatever repo tree earlier stages produced),
+# runs the caller command, and tars the repo tree back out. That keeps the
+# stages composable -- stage N sees stage N-1 output -- with no mount anywhere.
+drun() {
+  local img="$1"; shift
+  local script=""
+  # Two call shapes exist in this file and streaming breaks one of them:
+  #   drun IMG bash -c "..."   command in argv  -- fine
+  #   drun IMG sh -s <<EOS     script on STDIN  -- collides with the tar
+  # The opkg stage uses the second form, and when stdin was the tar its script
+  # simply never arrived: the stage produced no feed, and because docker was
+  # piped into tar its non-zero exit was masked. So capture such a script and
+  # send it inside the tar instead.
+  # Staged under its final name in its own directory. GNU tar --transform is
+  # GLOBAL, not per -C group, so using it here renamed every member of the
+  # archive to .drun-script.sh and tar refused: "can not remove old file
+  # .drun-script.sh: Is a directory".
+  local sdir=""
+  case " $* " in *" -s "*) sdir="$(mktemp -d)"; cat > "$sdir/.drun-script.sh"; script="$sdir/.drun-script.sh" ;; esac
+  mkdir -p packaging/out/repo
+  local rc=0
+  if [ -n "$script" ]; then
+    tar -cf - packaging/out/pkg packaging/repo/keys packaging/out/repo \
+        -C "$sdir" .drun-script.sh \
+      | MSYS_NO_PATHCONV=1 docker run -i --rm "$img" sh -c '
+          set -e
+          exec 3>&1 1>&2
+          mkdir -p /work && cd /work && tar -xf -
+          sh /work/.drun-script.sh
+          tar -cf - packaging/out/repo >&3
+        ' \
+      | tar -xf - -C . || rc=$?
+    rm -rf "$sdir"
+  else
+    tar -cf - packaging/out/pkg packaging/repo/keys packaging/out/repo \
+      | MSYS_NO_PATHCONV=1 docker run -i --rm "$img" sh -c '
+          set -e
+          exec 3>&1 1>&2
+          mkdir -p /work && cd /work && tar -xf -
+          "$@"
+          tar -cf - packaging/out/repo >&3
+        ' sh "$@" \
+      | tar -xf - -C . || rc=$?
+  fi
+  # Without this the docker exit status is lost to the pipe, which is exactly
+  # how a whole missing repo section got past the first run.
+  return $rc
+}
 
 [ -e "$PKG/breeze-core_${VER}_amd64.deb" ] || { echo "no packages for $VER — run build-packages.sh first"; exit 1; }
 
