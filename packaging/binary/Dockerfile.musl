@@ -81,6 +81,24 @@ RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
     --mount=type=cache,target=/cargo-target,sharing=locked \
     python3 -m venv /venv \
     && /venv/bin/pip install --upgrade pip \
+    # Use clang for EVERY native build on these targets, not just the
+    # bootloader. Emulated gcc is unreliable in both directions: it segfaulted
+    # in cc1 compiling PyInstaller's bootloader on s390x, and on ppc64le it
+    # segfaulted in collect2 — the linker driver — while linking pycryptodome's
+    # _SHA384.abi3.so, 326 seconds in. clang has survived everything so far.
+    # LDSHARED matters as much as CC: setuptools takes the link command from
+    # sysconfig, so setting CC alone still links through gcc's driver. And
+    # RUSTFLAGS -C linker matters as much again: rustc invokes plain `cc` for
+    # its link step and ignores CC entirely, so pydantic-core's own build script
+    # went down in the same collect2 segfault even after pycryptodome, uvloop
+    # and watchfiles had all built cleanly with clang. Three separate knobs, one
+    # underlying problem.
+    && if [ "$WITH_TOOLCHAIN" = "1" ]; then \
+         export CC="${POC_CC:-clang}" \
+                CXX="${POC_CC:-clang}++" \
+                LDSHARED="${POC_CC:-clang} -shared" \
+                RUSTFLAGS="${RUSTFLAGS} -C linker=${POC_CC:-clang}"; \
+       fi \
     && /venv/bin/pip install -r requirements.txt \
     && if [ "$WITH_TOOLCHAIN" = "1" ]; then \
          /venv/bin/pip download --no-binary :all: --no-deps -d /tmp/pyi pyinstaller \
