@@ -14,12 +14,17 @@ REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$REPO"
 VER="$(sed -n 's/^__version__ = "\(.*\)"/\1/p' meow_ac/__init__.py)"
 
-MOUNT="$REPO"
-case "$MOUNT" in /[a-z]/*) MOUNT="$(echo "$MOUNT" | sed -E 's#^/([a-z])/#\U\1:/#')" ;; esac
 
 [ -d packaging/out/bundle-musl-amd64 ] || { echo "musl bundles missing — run build-binaries.sh"; exit 1; }
 
-MSYS_NO_PATHCONV=1 docker run -i --rm -v "$MOUNT:/work" -w /work alpine:3.20 sh -s "$VER" <<'EOS'
+# Stream the inputs in and the .ipk files out rather than bind-mounting the repo.
+# Docker Desktop refuses to mount this checkout at all ("is not shared from the
+# host"), and has separately been seen presenting a mount as silently empty --
+# which is why packaging/nfpm/build-packages.sh streams as well. The build script
+# itself travels inside the tar, so none of it has to survive shell quoting.
+mkdir -p packaging/out/pkg
+WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
+cat > "$WORK/build-inside.sh" <<'EOS'
 set -eu
 VER="$1"
 apk add --no-cache bash tar >/dev/null
@@ -97,5 +102,18 @@ for a in aarch64_generic aarch64_cortex-a53 aarch64_cortex-a72; do
     build_one arm64 "$a"
 done
 EOS
+
+tar -cf - packaging/out/bundle-musl-amd64 packaging/out/bundle-musl-arm64 \
+        packaging/openwrt/breeze-core.init packaging/nfpm/breeze-core.env \
+        -C "$WORK" build-inside.sh \
+  | MSYS_NO_PATHCONV=1 docker run -i --rm alpine:3.20 sh -c '
+      set -eu
+      exec 3>&1 1>&2
+      mkdir -p /work && cd /work && tar -xf -
+      mkdir -p /work/packaging/out/pkg
+      apk add --no-cache bash tar >/dev/null
+      sh ./build-inside.sh "'"$VER"'"
+      tar -cf - -C /work/packaging/out/pkg . >&3
+    ' | tar -xf - -C packaging/out/pkg
 
 ls -la packaging/out/pkg/*.ipk
