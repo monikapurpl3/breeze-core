@@ -2,11 +2,13 @@
 
 # Plan: cross-build the odd architectures instead of emulating them
 
-**Status: implemented for Termux (aarch64, x86_64); still a proposal for the musl
-targets and MIPS.** riscv64, s390x, ppc64le and Termux x86_64 were built by
-emulating everything under QEMU. **Termux aarch64 — the target that deadlocked
-twice under emulation and could not be built at all — now builds via the
-two-stage route described here**, and §8 records what it actually cost.
+**Status: implemented for Termux (aarch64, x86_64), Debian mips64el, and OpenWrt
+(mips_24kc, mipsel_24kc); still a proposal for the musl bundle targets.**
+riscv64, s390x, ppc64le and Termux x86_64 were built by emulating everything
+under QEMU. **Termux aarch64 — which deadlocked twice under emulation and could
+not be built at all — now builds via the two-stage route described here** (§7),
+and **MIPS, where cross-building is the only option at all, is delivered as
+wheelhouses** (§8).
 
 ## 1. Why we didn't do this in the first place — and why that stopped being right
 
@@ -80,7 +82,12 @@ nothing left that spawns a compiler storm.
 |---|---|---|
 | musl (s390x, ppc64le, riscv64) | `cargo-zigbuild` (zig ships the musl sysroots) or `musl-cross` | `zig cc` as `CC` |
 | Android (aarch64, x86_64) | Rust `*-linux-android` targets + NDK linker | NDK clang |
-| MIPS (mips64el, mipsel) | nightly + `-Z build-std` (no prebuilt `std` — tier 3) | `zig cc` (zig supports 32-bit mips) |
+| MIPS (Debian mips64el) | nightly + `-Z build-std` (tier 3) | Debian `gcc-<triple>` + `libc6-dev-<arch>-cross` |
+| MIPS (OpenWrt mips_24kc, mipsel_24kc) | nightly + `-Z build-std` (tier 3) | the **OpenWrt SDK** toolchain — see §8 |
+
+(zig was the original guess for MIPS. In the event neither MIPS target needed it:
+Debian ships cross toolchains for its own MIPS ports, and OpenWrt ships an SDK
+that is a better match than any generic musl toolchain would be.)
 
 `cargo-zigbuild` is the interesting one: it makes "compile Rust for a musl
 target you don't have a toolchain for" a one-liner, which is precisely the
@@ -144,10 +151,10 @@ Two further consequences worth keeping:
    install from it and skip `WITH_TOOLCHAIN` entirely — no rust, no gcc, no
    clang workarounds, no cache mounts. s390x and ppc64le already work without
    this, so it buys build time rather than capability.
-4. **Then MIPS**, which is only reachable this way: `-Z build-std` cross-builds
-   the `std` that Rust doesn't ship, on the host, at native speed. Unlike
-   Android, MIPS Linux targets are **tier 3** — that is the one place the harder
-   Rust machinery is unavoidable.
+4. ~~**Then MIPS.**~~ **Done — see §8.** It was indeed the one place the harder
+   Rust machinery was unavoidable (tier 3, so `-Z build-std` compiles `std` from
+   source), and the one place cross-building was not an optimisation but the only
+   route: Debian mips64el ships rustc 1.63 and pydantic-core needs ≥ 1.88.
 
 ## 6. What this is expected to buy
 
@@ -215,7 +222,72 @@ five minutes into a 239 MB download, because near-0% CPU during a download is
 indistinguishable from a qemu deadlock by CPU alone. It now requires no CPU
 **and** no I/O movement before declaring a stall.
 
-## 8. Decisions for the maintainer
+## 8. OpenWrt: the target this was actually for
+
+MIPS matters because of routers, so the wheels are built against **OpenWrt's own
+SDK** rather than a generic musl toolchain — same musl, same soft-float ABI, same
+gcc that built OpenWrt's python3.
+
+**A wheelhouse is the right artifact here, not a bundle.** A frozen bundle is
+~25 MB against 8-16 MB of flash. Wheels drop into an extroot or chroot and give a
+working development environment, which is the stated point of these builds.
+
+| OpenWrt arch | Endian | Built | Runtime-verified |
+|---|---|---|---|
+| `mips_24kc` (ath79 — TP-Link, GL.iNet, Netgear) | **big** | ✅ 55 s | ✅ on the published OpenWrt rootfs |
+| `mipsel_24kc` (ramips — MT7620/MT7621) | little | ✅ 57 s | ✅ under `qemu-mipsel`, userland assembled from the feeds |
+| `mips64_octeonplus` (Octeon — EdgeRouter) | **big** | ✅ 57 s | ❌ see below |
+| any 64-bit little-endian | — | — | **does not exist in OpenWrt** |
+
+Note the last row: there is no mips64el in OpenWrt. Of eight MIPS package
+architectures, the only 64-bit one is `mips64_octeonplus`, and it is big-endian.
+And big-endian is not a curiosity — `ath79` is probably the single most common
+MIPS router target.
+
+### What OpenWrt does differently, and what each mistake looks like
+
+- **The extension suffix does not match maturin's output.** OpenWrt CPython
+  accepts `.cpython-311-mips-linux-musl**sf**.so`; maturin emits `...-musl.so`,
+  which is not in `importlib.machinery.EXTENSION_SUFFIXES`. The wheel installs
+  cleanly and then fails to import. `cross-wheel.sh` renames the `.so` inside the
+  wheel, deriving the true multiarch string from the *filename* of the shipped
+  sysconfigdata.
+- **No libpython, and sysconfigdata is a `.pyc` only** — the `.py` is stripped to
+  save flash, so pyo3's cross-detection has nothing to parse. Hence an explicit
+  `PYO3_CONFIG_FILE`.
+- **`libc` is not installable from any feed.** musl is baked into the firmware
+  image, so `Depends: libc` is satisfied by the base system. Assembling a test
+  userland means taking the loader from the SDK toolchain, or qemu stops with
+  `Could not open '/lib/ld-musl-mipsel-sf.so.1'` — which reads as a qemu fault.
+- **`python3-light` is not the stdlib.** OpenWrt splits it; `decimal`, which
+  pydantic-core imports at module scope, is a separate package. Install the
+  `python3` meta-package.
+- **BE and LE 32-bit wheels have IDENTICAL filenames.** `uname -m` is `mips` on
+  both, so both are `...-cp311-cp311-linux_mips.whl` with incompatible contents.
+  Wheelhouses are therefore staged per architecture and never merged. It fails
+  safe rather than silently: the `.so` inside carries the full multiarch string,
+  so a wrong-endian install raises `ImportError` instead of running byte-swapped
+  code.
+
+### Octeon: built, not verified
+
+`mips64_octeonplus` produces a correct-looking artifact — ELF 64-bit MSB, MIPS64
+rel2, right suffix — but the emulated interpreter dies with **SIGILL before the
+wheel is reached**, so nothing about the wheel is actually demonstrated. Partial
+diagnosis, since the shape of it is useful:
+
+- OpenWrt builds this arch with `-march=octeon+`, and qemu's default generic
+  MIPS64R2 model does not implement those instructions. `QEMU_CPU=Octeon68XX` is
+  required.
+- With that model, a **statically linked** Octeon binary from the same SDK runs
+  correctly (`exit=42`). The **dynamically linked** interpreter still SIGILLs.
+
+So the CPU model was necessary but not sufficient, and the static/dynamic
+difference is unexplained. It is deliberately **not published**: an unverified
+wheel for an exotic arch is worse than no wheel, because it looks like the
+verified ones.
+
+## 9. Decisions for the maintainer
 
 1. **Spike first, or build the pipeline?** I'd spike: one target, one wheel, and
    the tag/ABI question answered before anything is generalised.
