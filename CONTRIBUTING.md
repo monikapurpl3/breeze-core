@@ -51,7 +51,11 @@ almost every real install, so they go out first and the rest follow.
 2. **Windows** installer + winget manifests — `deploy/windows/build-installer.ps1`.
 3. **BSD** — FreeBSD `.pkg` and NetBSD binary package, built on the VMs
    (`packaging/repo/build-bsd-repo.sh` stages them).
-4. **OpenWrt** `.ipk` feed.
+4. **OPNsense** — the `os-breeze-core` plugin: `packaging/opnsense/build-plugin.sh`
+   then `verify-plugin.sh`. It needs its own build rather than the FreeBSD package
+   because OPNsense is `FreeBSD:14:amd64` with python311 and neither rust nor pip,
+   so the runtime is vendored — [docs/OPNSENSE.md](docs/OPNSENSE.md).
+5. **OpenWrt** `.ipk` feed.
 
 **Tier 2 — occasionally.** **Termux** (Android): every major version, or every
 other. It is cheap now that pydantic-core is cross-compiled rather than built
@@ -63,13 +67,12 @@ version they were last built for, and the published artifacts say so plainly.
 They are developer aids, not a support commitment. Recipes and every trap:
 [docs/POC-CROSS-BUILDS.md](docs/POC-CROSS-BUILDS.md).
 
-**Planned, not started: OPNsense as a first-class port.** Worth noting that the
-groundwork is already done — OPNsense is FreeBSD-based and consumes FreeBSD
-packages, so the existing signed FreeBSD `.pkg` is most of the way there. What is
-actually missing is the OPNsense-specific part: a plugin with its own GUI page and
-config integration, and conformance to their repository/plugin conventions. That
-is a different kind of work from the porting above, which is why it is separate
-rather than a fifth item in tier 1.
+**OPNsense is tier 1 as of 3.1.0**, listed above between BSD and OpenWrt. It is a
+real plugin — a page under Services, service control through configd, an rc
+script — not a `pkg add` of the FreeBSD package, because the ABI, the Python
+version and the absent dependencies all differ. The GUI is the one part no
+automated check covers: the PHP is lint-checked and the XML parsed, but the page
+rendering has to be confirmed on a real firewall.
 
 ## Security
 

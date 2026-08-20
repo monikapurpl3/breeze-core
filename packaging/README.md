@@ -16,6 +16,10 @@ test/      test-matrix.sh — installs the packages on 15 distro images and
            verifies binary + service user + perms + server startup
 openwrt/   procd init + build-ipk.sh — real .ipk from the musl bundles
            (musl 1.2.4 floor: bundles build on Alpine 3.19 so OpenWrt 23.05 runs them)
+opnsense/  os-breeze-core plugin: rc script, configd actions + template, MVC
+           page/menu/ACL, build-plugin.sh + verify-plugin.sh. Its own build,
+           not the FreeBSD package: OPNsense is FreeBSD:14 with python311 and
+           no rust or pip, so the runtime is vendored (docs/OPNSENSE.md)
 source/    recipes for packagers: Arch PKGBUILD (source venv build),
            Gentoo -bin ebuild (+acct-user/group), Void xbps-src template
 ../flake.nix   Nix flake (source build) + NixOS module
@@ -28,6 +32,7 @@ Local workflow (workstation, Docker Desktop):
 ./packaging/nfpm/build-packages.sh       # 12 artifacts -> packaging/out/pkg/
 ./packaging/test/test-matrix.sh          # 15-target install-test matrix
 ./packaging/openwrt/build-ipk.sh         # OpenWrt .ipk (x86_64 + aarch64 labels)
+./packaging/opnsense/build-plugin.sh     # os-breeze-core .pkg (on the FreeBSD VM)
 ./packaging/repo/build-repo.sh           # signed apt/rpm/pacman/apk/opkg repo tree
 ./packaging/repo/publish.sh              # push to the package host (atomic swap)
 ```

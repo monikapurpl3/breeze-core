@@ -155,10 +155,13 @@ Download **`Breeze-Core-Setup.exe`** from the
 and double-click — it installs the background service and offers to find your
 units. Walkthrough → **[docs/WINDOWS.md](docs/WINDOWS.md)**.
 
-### 🐳 Docker · 🍎 macOS · 😈 BSD · 🔧 from source
+### 🐳 Docker · 🍎 macOS · 😈 BSD · 🛡️ OPNsense · 🔧 from source
 
 - **Docker** (if you already run containers): multi-arch image on GHCR → **[docs/DOCKER.md](docs/DOCKER.md)**.
 - **macOS / FreeBSD**: from-source install with launchd / rc.d service → **[docs/INSTALL.md](docs/INSTALL.md)**.
+- **OPNsense**: the `os-breeze-core` plugin adds a **Services → Breeze Core** page,
+  with the whole Python runtime vendored so nothing is ever compiled on the
+  firewall → **[docs/OPNSENSE.md](docs/OPNSENSE.md)**.
 - **From source on anything** (venv + your own service unit, every distro + non-systemd inits + musl) → **[docs/INSTALL.md](docs/INSTALL.md)**.
 
 > **Reaching it from outside your home** (HTTPS over the internet)? Get it
@@ -174,6 +177,7 @@ units. Walkthrough → **[docs/WINDOWS.md](docs/WINDOWS.md)**.
 | **Install** from native packages (deb/rpm/pacman/apk/opkg/flake/tarball) | [docs/PACKAGES.md](docs/PACKAGES.md) |
 | **Install** from source, on any distro / init / libc, macOS, BSD | [docs/INSTALL.md](docs/INSTALL.md) |
 | **Install** on Windows (installer, service, Caddy wizard, tripwire) | [docs/WINDOWS.md](docs/WINDOWS.md) |
+| **Install** on **OPNsense** as a plugin (GUI page, service control) | [docs/OPNSENSE.md](docs/OPNSENSE.md) |
 | **Run** it as a container (image, compose, variants) | [docs/DOCKER.md](docs/DOCKER.md) |
 | **Expose** it to the internet safely (nginx/Apache, TLS, fail2ban) | [docs/REVERSE-PROXY.md](docs/REVERSE-PROXY.md) + [HARDENING.md](HARDENING.md) |
 | **Configure** it / call the **REST API** / understand **auth** | [docs/API.md](docs/API.md) |
