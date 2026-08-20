@@ -23,6 +23,7 @@ TEST="${TEST_ROOT:-/jail/test14}"
 # running Breeze Core itself from the FreeBSD package work, which gives "address
 # already in use" and looks exactly like a broken rc script.
 PORT="${VERIFY_PORT:-18420}"
+FB_BASE="${FB_BASE:-14.3-RELEASE}"
 
 # Every `breeze-core <verb>` the plugin tells an admin to run must BE a
 # subcommand. This is not hypothetical: the first cut of this plugin told people
@@ -58,7 +59,7 @@ echo "  every verb named in the plugin text is a real subcommand"
 # No -n here: stdin IS the heredoc carrying the remote script, and -n points
 # stdin at /dev/null, so the remote side runs nothing at all and the only
 # symptom is a missing artefact at the end.
-ssh -o BatchMode=yes "$USER_AT" "ROOT='$ROOT' TEST='$TEST' PORT='$PORT' sh -s" <<'REMOTE'
+ssh -o BatchMode=yes "$USER_AT" "ROOT='$ROOT' TEST='$TEST' PORT='$PORT' FB_BASE='$FB_BASE' sh -s" <<'REMOTE'
 set -eu
 fail=0
 note() { echo "  $*"; }
@@ -113,6 +114,13 @@ cleanup_test_root() {
 cleanup_test_root
 
 doas mkdir -p "$TEST"
+# /tmp is cleared on FreeBSD reboot (clear_tmp_enable), and build-plugin.sh only
+# fetches base.txz when the build root is absent -- which it is not, after the
+# first build. So a VM reboot leaves a working builder and a verifier that dies
+# on "tar: Failed to open /tmp/base14.txz". Fetch it here too rather than
+# depending on a leftover from another script.
+[ -f /tmp/base14.txz ] || fetch -q -o /tmp/base14.txz \
+    "https://download.freebsd.org/releases/amd64/$FB_BASE/base.txz"
 doas tar -xpf /tmp/base14.txz -C "$TEST"
 doas cp /etc/resolv.conf "$TEST/etc/resolv.conf"
 doas mount -t devfs devfs "$TEST/dev"
