@@ -157,7 +157,10 @@ units. Walkthrough → **[docs/WINDOWS.md](docs/WINDOWS.md)**.
 
 ### 🐳 Docker · 🍎 macOS · 😈 BSD · 🛡️ OPNsense · 🔧 from source
 
-- **Docker** (if you already run containers): multi-arch image on GHCR → **[docs/DOCKER.md](docs/DOCKER.md)**.
+- **Docker / Podman** (if you already run containers): five images on GHCR —
+  Alpine Edge (multi-arch, self-updating), UBI 9 glibc at two x86-64 levels, and
+  one with **nginx bundled so HTTPS works on first start** →
+  **[docs/DOCKER.md](docs/DOCKER.md)**.
 - **macOS / FreeBSD**: from-source install with launchd / rc.d service → **[docs/INSTALL.md](docs/INSTALL.md)**.
 - **OPNsense**: the `os-breeze-core` plugin adds a **Services → Breeze Core** page,
   with the whole Python runtime vendored so nothing is ever compiled on the
@@ -178,7 +181,7 @@ units. Walkthrough → **[docs/WINDOWS.md](docs/WINDOWS.md)**.
 | **Install** from source, on any distro / init / libc, macOS, BSD | [docs/INSTALL.md](docs/INSTALL.md) |
 | **Install** on Windows (installer, service, Caddy wizard, tripwire) | [docs/WINDOWS.md](docs/WINDOWS.md) |
 | **Install** on **OPNsense** as a plugin (GUI page, service control) | [docs/OPNSENSE.md](docs/OPNSENSE.md) |
-| **Run** it as a container (image, compose, variants) | [docs/DOCKER.md](docs/DOCKER.md) |
+| **Run** it as a container (five images, compose, HTTPS variant) | [docs/DOCKER.md](docs/DOCKER.md) + [containers/README.md](containers/README.md) |
 | **Expose** it to the internet safely (nginx/Apache, TLS, fail2ban) | [docs/REVERSE-PROXY.md](docs/REVERSE-PROXY.md) + [HARDENING.md](HARDENING.md) |
 | **Configure** it / call the **REST API** / understand **auth** | [docs/API.md](docs/API.md) |
 | **Fix** something (errors, 401/403/500, CLIs, fail2ban) | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) |
