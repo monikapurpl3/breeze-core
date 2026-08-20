@@ -24,6 +24,37 @@ TEST="${TEST_ROOT:-/jail/test14}"
 # already in use" and looks exactly like a broken rc script.
 PORT="${VERIFY_PORT:-18420}"
 
+# Every `breeze-core <verb>` the plugin tells an admin to run must BE a
+# subcommand. This is not hypothetical: the first cut of this plugin told people
+# to run `breeze-core setup` -- in the GUI page, the pkg install message and the
+# docs -- and there is no such subcommand. It is `pair`. Nothing caught it,
+# because none of it is code: the package installs fine and the page renders
+# fine, and the admin just gets a usage error at the one moment they follow the
+# instructions. The CLI's own parser is the source of truth.
+echo "=== documented CLI verbs exist ==="
+verbs="$(sed -n 's/.*sub\.add_parser("\([a-z]*\)".*/\1/p' meow_ac/cli/main.py | tr '\n' ' ')"
+echo "  CLI offers: $verbs"
+unknown=""
+# --exclude this file: it is the test, not user-facing text, and the paragraph
+# above necessarily contains the very string it is looking for. Scanning itself
+# made the guard fail on its own comment -- plus 'the' and 'plugin' out of the
+# prose. With the verifier excluded every remaining match is a real instruction
+# to a real admin, so no ignore-list of English words is needed.
+for w in $(grep -rhoE 'breeze-core [a-z]+' packaging/opnsense docs/OPNSENSE.md \
+             --exclude=verify-plugin.sh 2>/dev/null \
+             | awk '{print $2}' | sort -u); do
+    case " $verbs " in
+        *" $w "*) ;;
+        *) unknown="$unknown $w" ;;
+    esac
+done
+if [ -n "$unknown" ]; then
+    echo "  FAIL: named as subcommands but do not exist:$unknown"
+    echo "        (check against: $verbs)"
+    exit 1
+fi
+echo "  every verb named in the plugin text is a real subcommand"
+
 # No -n here: stdin IS the heredoc carrying the remote script, and -n points
 # stdin at /dev/null, so the remote side runs nothing at all and the only
 # symptom is a missing artefact at the end.

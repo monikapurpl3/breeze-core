@@ -68,8 +68,8 @@
     <p>
         {{ lang._('Pairing a phone or browser needs approval from the local network -- that is deliberate, not a fault. From a shell on this firewall:') }}
     </p>
-    <pre>breeze-core approve list
-breeze-core approve approve &lt;CODE&gt;</pre>
+    <pre>breeze-core devices           # what is already enrolled
+breeze-core approve &lt;CODE&gt;</pre>
     <p>{{ lang._('Air conditioners are discovered and paired with:') }}</p>
-    <pre>breeze-core setup</pre>
+    <pre>breeze-core pair</pre>
 </div>

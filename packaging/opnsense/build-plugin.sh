@@ -94,7 +94,7 @@ doas cp -R "$ROOT/tmp/src/packaging/opnsense/files/usr/local/opnsense" "$S/usr/l
 
 # CLI wrapper. meow_ac has no __main__, so `-m meow_ac` fails outright; the CLI
 # module is meow_ac.cli, as the BSD installer also uses. The GUI page tells the
-# admin to run `breeze-core setup`, so this has to work.
+# admin to run `breeze-core pair`, so this has to work.
 doas sh -c "cat > '$S/usr/local/bin/breeze-core'" <<'WRAP'
 #!/bin/sh
 # Breeze Core CLI — setup / approve / diag, on the vendored interpreter.
@@ -129,7 +129,7 @@ Adds Services > Breeze Core to the GUI for enable, bind address, port and servic
 control. The Python runtime is vendored because OPNsense packages neither the
 dependencies nor rust or pip — nothing is ever compiled on the firewall.
 
-Pair air conditioners with 'breeze-core setup'; admit clients with
+Pair air conditioners with 'breeze-core pair'; admit clients with
 'breeze-core approve'. Approval is LAN-only by design.
 EOD
 maintainer: "monikapurpl3@users.noreply.github.com"
@@ -157,7 +157,7 @@ install -d -m 755 /usr/local/etc/rc.conf.d
 rm -rf /tmp/opnsense_cache_* /var/cache/opnsense-mvc 2>/dev/null || true
 echo "===> Breeze Core installed."
 echo "     1) Services > Breeze Core: set the listen address, then enable."
-echo "     2) breeze-core setup     — discover and pair the air conditioners."
+echo "     2) breeze-core pair       — discover and pair the air conditioners."
 echo "     3) breeze-core approve   — admit a phone or browser (LAN only)."
 EOS
   post-deinstall: <<EOS

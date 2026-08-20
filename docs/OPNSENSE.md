@@ -108,7 +108,7 @@ different problem entirely.
   /tmp/x.log`, or the cause is invisible.
 - **`meow_ac` has no `__main__`** — the CLI module is `meow_ac.cli`, which is what
   the BSD installer uses. `-m meow_ac` fails outright, and the GUI page tells the
-  admin to run `breeze-core setup`.
+  admin to run `breeze-core pair`.
 - **The source tar is built on Windows**, which records no POSIX execute bit, so
   anything that must be executable is chmod-ed explicitly in the build.
 - **Test on a port that cannot collide.** The builder VM may be running Breeze
@@ -167,7 +167,7 @@ deliberately outside the signed FreeBSD repository: that repo is
 Then:
 
 1. **Services → Breeze Core** in the GUI: set the listen address and enable it.
-2. `breeze-core setup` — discover and pair the air conditioners.
+2. `breeze-core pair` — discover and pair the air conditioners.
 3. `breeze-core approve` — admit a phone or browser. Approval is LAN-only by
    design.
 
