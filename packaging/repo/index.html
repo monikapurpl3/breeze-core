@@ -22,7 +22,7 @@
     /* one colour per package family — drives its rule, heading, code tint */
     --deb:#e0507c; --rpm:#4d97ea; --suse:#5fc768; --arch:#48bdf2;
     --alpine:#7b8cf0; --owrt:#f2982f; --fbsd:#e35a4a; --nbsd:#f0ad45;
-    --obsd:#efd340; --after:#4fd1c5; --src:#b189f2; --droid:#7fd66b; --win:#3fa9f5; --poc:#ff8fa3;
+    --obsd:#efd340; --after:#4fd1c5; --src:#b189f2; --droid:#7fd66b; --win:#3fa9f5; --poc:#ff8fa3; --opn:#d94f00;
   }
   *{box-sizing:border-box}
   html{-webkit-text-size-adjust:100%}
@@ -60,6 +60,7 @@
   .t-droid{background:var(--droid);color:#06210a!important}
   .t-win{background:var(--win);color:#03121f!important}
   .t-poc{background:var(--poc);color:#2b0410!important}
+    .t-opn{background:var(--opn);color:#1b0700!important}
 
   section{margin-top:38px;border-left:3px solid var(--c,#3d4a5c);padding-left:18px}
   section>h2{font-family:var(--display);font-size:21px;font-weight:650;
@@ -138,6 +139,7 @@
     <a class="t-fbsd" href="#freebsd">FreeBSD</a>
     <a class="t-nbsd" href="#netbsd">NetBSD</a>
     <a class="t-obsd" href="#openbsd">OpenBSD</a>
+    <a class="t-opn" href="#opnsense">OPNsense</a>
     <a class="t-win" href="#windows">Windows</a>
     <a class="t-droid" href="#android">Android app</a>
     <a class="t-after" href="#after">After install</a>
@@ -293,6 +295,22 @@ doas sh packaging/bsd/install.sh</pre>
       native packages because their tooling (<code>pkg</code> / <code>pkg_create</code>) makes that
       practical. A ports submission is welcome — see
       <a href="https://github.com/monikapurpl3/breeze-core/tree/main/packaging/bsd">packaging/bsd/</a>.</div>
+  </section>
+
+  <section id="opnsense" style="--c:var(--opn)">
+    <h2>OPNsense</h2>
+    <span class="who">amd64 — the <code>os-breeze-core</code> plugin, adds <b>Services → Breeze Core</b> to the GUI</span>
+<pre><span class="c"># from a shell on the firewall, as root</span>
+fetch https://bolero.salataputarica.hr.eu.org/opnsense/os-breeze-core-latest.pkg
+pkg add os-breeze-core-latest.pkg</pre>
+    <p>Then <b>Services → Breeze Core</b> to set the listen address and enable it,
+      <code>breeze-core setup</code> to pair the air conditioners, and
+      <code>breeze-core approve</code> to admit a phone or browser.</p>
+    <div class="note">Its own package, not the FreeBSD one above: OPNsense is
+      <code>FreeBSD:14:amd64</code> with <code>python311</code> and neither <code>rust</code> nor
+      <code>pip</code>, so the whole Python runtime is vendored inside the plugin and
+      <b>nothing is ever compiled on the firewall</b>. Checksums:
+      <a href="/opnsense/">/opnsense/</a>.</div>
   </section>
 
   <section id="windows" style="--c:var(--win)">

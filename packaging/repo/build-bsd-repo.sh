@@ -98,6 +98,25 @@ else
   echo "  (no WINDOWS_EXE given — skipping)"
 fi
 
+echo "=== OPNsense plugin (optional) ==="
+# Built on the FreeBSD VM by packaging/opnsense/build-plugin.sh, so it arrives by
+# path like the APK and the .exe. Deliberately NOT inside the signed FreeBSD
+# repository: its ABI is FreeBSD:14 while that repo is 15, and a firewall admin
+# installs it with a plain `pkg add <file>` anyway.
+#   OPNSENSE_PKG=packaging/out/opnsense/os-breeze-core-3.1.0.pkg ./packaging/repo/build-bsd-repo.sh
+if [ -n "${OPNSENSE_PKG:-}" ] && [ -f "$OPNSENSE_PKG" ]; then
+  rm -rf "$OUT/opnsense"; mkdir -p "$OUT/opnsense"
+  base="$(basename "$OPNSENSE_PKG")"
+  cp "$OPNSENSE_PKG" "$OUT/opnsense/$base"
+  # A stable name too, so docs and instructions need not chase the version.
+  cp "$OPNSENSE_PKG" "$OUT/opnsense/os-breeze-core-latest.pkg"
+  ( cd "$OUT/opnsense"       && sha256sum "$base" > "$base.sha256"       && sha256sum os-breeze-core-latest.pkg > os-breeze-core-latest.pkg.sha256 )
+  chmod 644 "$OUT/opnsense"/*
+  echo "  $base (+ latest, + sha256)"
+else
+  echo "  (no OPNSENSE_PKG given — skipping)"
+fi
+
 # winget manifests are source, not build output, so they're always published.
 if [ -d packaging/winget ]; then
   rm -rf "$OUT/winget"; mkdir -p "$OUT/winget"

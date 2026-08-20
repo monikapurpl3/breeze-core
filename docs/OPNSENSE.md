@@ -155,9 +155,14 @@ different problem entirely.
 
 ```sh
 # OPNsense shell, as root
-fetch https://bolero.salataputarica.hr.eu.org/opnsense/os-breeze-core-<ver>.pkg
-pkg add os-breeze-core-<ver>.pkg
+fetch https://bolero.salataputarica.hr.eu.org/opnsense/os-breeze-core-latest.pkg
+pkg add os-breeze-core-latest.pkg
 ```
+
+A version-stamped copy and `.sha256` files sit alongside it in
+[/opnsense/](https://bolero.salataputarica.hr.eu.org/opnsense/). The plugin is
+deliberately outside the signed FreeBSD repository: that repo is
+`FreeBSD:15:amd64` and this package is `14`, so `pkg` would refuse it there.
 
 Then:
 
