@@ -1,0 +1,103 @@
+name: Container cleanup
+
+# Prunes the container package back to tags that mean something.
+#
+# The old Docker workflow tagged every single commit as sha-<short>, which left
+# 81 such tags on the package plus a pile of untagged manifests -- so the GHCR
+# page was unreadable and no tag told you what was inside it. This deletes that
+# noise. It never runs on its own: dispatch it, and it defaults to a dry run.
+#
+# Deliberately NOT touched by default: vX.Y.Z tags. Someone may have pinned one.
+# Pass delete_old_version_tags to include the pre-3.1.0 ones as well.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "List what would be deleted, delete nothing"
+        type: boolean
+        default: true
+      delete_sha_tags:
+        description: "Delete every sha-* tag (old per-commit builds)"
+        type: boolean
+        default: true
+      delete_stale_latest:
+        description: "Delete latest-x86-64-v2 / latest-x86-64-v3 (the confusing pair)"
+        type: boolean
+        default: true
+      delete_untagged:
+        description: "Delete untagged versions (dangling manifests)"
+        type: boolean
+        default: true
+      delete_old_version_tags:
+        description: "Also delete vX.Y.Z tags older than 3.0 (someone may have pinned these)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Decide and (optionally) delete
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const pkg = 'breeze-core';
+            const owner = context.repo.owner;
+            const dry = ${{ inputs.dry_run }};
+            const opts = {
+              sha: ${{ inputs.delete_sha_tags }},
+              staleLatest: ${{ inputs.delete_stale_latest }},
+              untagged: ${{ inputs.delete_untagged }},
+              oldVersions: ${{ inputs.delete_old_version_tags }},
+            };
+
+            // Paginate: there are well over a hundred versions, and the default
+            // page is 30 -- a non-paginated pass silently prunes only the newest
+            // few and looks like it worked.
+            const versions = await github.paginate(
+              github.rest.packages.getAllPackageVersionsForPackageOwnedByUser,
+              { package_type: 'container', package_name: pkg, username: owner, per_page: 100 }
+            );
+
+            const doomed = [];
+            const kept = [];
+            for (const v of versions) {
+              const tags = v.metadata?.container?.tags ?? [];
+              let why = null;
+              if (tags.length === 0) {
+                if (opts.untagged) why = 'untagged';
+              } else if (opts.sha && tags.every(t => t.startsWith('sha-'))) {
+                why = 'sha-only';
+              } else if (opts.staleLatest && tags.every(t => /^latest-x86-64-v[23]$/.test(t))) {
+                why = 'stale latest-*';
+              } else if (opts.oldVersions && tags.every(t => /^v[12]\./.test(t) || /^v3\.0\./.test(t))) {
+                why = 'pre-3.1 version tag';
+              }
+              (why ? doomed : kept).push({ id: v.id, tags, why });
+            }
+
+            core.summary.addHeading(`${pkg}: ${versions.length} versions`, 2);
+            core.summary.addRaw(dry ? '**Dry run — nothing deleted.**\n\n' : '**Deleting.**\n\n');
+            core.summary.addRaw(`Would remove **${doomed.length}**, keep **${kept.length}**.\n\n`);
+            core.summary.addHeading('Kept', 3);
+            core.summary.addRaw(kept.map(k => `- ${k.tags.join(', ') || '(untagged)'}`).join('\n') + '\n\n');
+            core.summary.addHeading('Removed', 3);
+            core.summary.addRaw(doomed.map(d => `- ${d.tags.join(', ') || '(untagged)'} — ${d.why}`).join('\n'));
+            await core.summary.write();
+
+            console.log(`keep ${kept.length}, remove ${doomed.length}, dry=${dry}`);
+            for (const k of kept) console.log(`  keep   ${k.tags.join(', ') || '(untagged)'}`);
+            if (dry) { for (const d of doomed) console.log(`  would remove  ${d.tags.join(', ') || '(untagged)'} (${d.why})`); return; }
+
+            for (const d of doomed) {
+              await github.rest.packages.deletePackageVersionForUser({
+                package_type: 'container', package_name: pkg, username: owner, package_version_id: d.id,
+              });
+              console.log(`  removed  ${d.tags.join(', ') || '(untagged)'} (${d.why})`);
+            }

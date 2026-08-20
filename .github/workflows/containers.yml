@@ -8,7 +8,24 @@ on:
   push:
     branches: [main]
     tags: ["v*"]
+    # Path-filtered on purpose: the UBI images compile every dependency from
+    # source, twice, so a README commit that rebuilt all five cost about as much
+    # runner time as a release. These are the paths an image actually contains.
+    paths:
+      - "containers/**"
+      - "meow_ac/**"
+      - "static/**"
+      - "setup_device.py"
+      - "requirements.txt"
+      - ".github/workflows/containers.yml"
   pull_request:
+    paths:
+      - "containers/**"
+      - "meow_ac/**"
+      - "static/**"
+      - "setup_device.py"
+      - "requirements.txt"
+      - ".github/workflows/containers.yml"
   workflow_dispatch:
 
 permissions:
