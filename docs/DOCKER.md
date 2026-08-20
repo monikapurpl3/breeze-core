@@ -1,94 +1,175 @@
 [← Breeze Core](../README.md)
 
-# Running Breeze Core in Docker
+# Running Breeze Core in a container
 
-A compact, non-root container built on Red Hat **UBI 9 minimal** (free & redistributable, glibc, security-patched). Image: `ghcr.io/monikapurpl3/breeze-core`.
+Five images, rebuilt from scratch for 3.1.0, each named for exactly what it is.
+`ghcr.io/monikapurpl3/breeze-core`.
 
-## Get the image
+| Tag | Base | libc | Arch | For |
+|---|---|---|---|---|
+| `latest` = `alpine-edge` | Alpine Edge | musl | **amd64 + arm64** | The default. Small, rolling, updates its own base packages. |
+| `alpine-edge-x86_64` | Alpine Edge | musl | amd64 | The same, pinned to one architecture. |
+| `alpine-edge-aarch64` | Alpine Edge | musl | arm64 | Pi 4/5, ARM servers. |
+| `alpine-edge-nginx-x86_64` | Alpine Edge | musl | amd64 | **HTTPS out of the box** — nginx bundled, certificate generated on first start. |
+| `ubi9-x86-64-v2` | Red Hat UBI 9 | glibc | amd64 | glibc on a vendor-patched base. Runs on any x86-64 from ~2009. |
+| `ubi9-x86-64-v3` | Red Hat UBI 9 | glibc | amd64 | The same compiled for AVX2-era CPUs (Haswell / Excavator or newer). |
 
-```bash
-# pull the published multi-arch image (amd64 / arm64):
-docker pull ghcr.io/monikapurpl3/breeze-core:latest
-# …or build it yourself:
-docker build -t breeze-core .
-```
+Every image also gets a pinnable `…-<version>` tag (`ubi9-x86-64-v2-3.1.0`),
+published for release tags only. `latest` and `alpine-edge` are the same
+manifest list, and the only tags that resolve on both architectures — psABI
+levels are an x86 concept, so the UBI images are x86-64 by construction.
 
-### Image variants
+**Which one:** not sure → `latest`. Want HTTPS without configuring a proxy →
+`alpine-edge-nginx-x86_64`. Prefer glibc and a vendor-patched base →
+`ubi9-x86-64-v2`. Full detail, and how the images are built and checked:
+[containers/README.md](../containers/README.md).
 
-| Tag | Base | For |
-|---|---|---|
-| `:latest`, `:vX.Y.Z` | UBI 9 (glibc), **amd64 + arm64** | Everyone — the default. |
-| `:vX.Y.Z-x86-64-v2` | UBI 9 (glibc), amd64 | Broadly-compatible microarch build (SSE4.2/POPCNT). |
-| `:vX.Y.Z-x86-64-v3` | UBI 9 (glibc), amd64 | Modern-CPU microarch build (**AVX2/BMI2/FMA**). |
+## Start it
 
-> **glibc vs musl.** The published image is glibc (UBI 9), which covers virtually all hosts. If you specifically need a **musl / Alpine** image (non-glibc base, smallest size), build the provided variant: `docker build -f Dockerfile.alpine -t breeze-core:alpine .`. Its builder stage carries a Rust/C toolchain so it compiles the native wheels when no musllinux wheel exists — see [INSTALL.md → Non-glibc (musl libc) systems](INSTALL.md#non-glibc-musl-libc-systems).
-
-> **x86-64 microarchitecture variants (`-x86-64-v2` / `-x86-64-v3`).** These compile **every** dependency from source (`pip --no-binary :all:`) with `-march`/`target-cpu` set, so the native extensions (pydantic-core, cryptography, aiohttp, …) use newer instruction sets. `v2` runs on essentially any x86-64 CPU; **`v3` requires AVX2** (Haswell/Excavator or newer) and will `SIGILL` on older CPUs — match the level to your host (`cat /sys/devices/cpu/caps/…` or just try). The workload is LAN-I/O-bound, so gains are modest; use these only if you want them. Build locally with `docker build -f Dockerfile.march --build-arg MARCH=x86-64-v3 -t breeze-core:v3 .`. **arm64 users:** stick with `:latest`.
-
-## The networking question (read this)
-
-Breeze Core talks to Midea units on your LAN:
-
-- **Discovery** (`setup_device.py`, no `--ip`) uses a UDP **broadcast**, which only works with **host networking**.
-- **Control** (reaching a unit's IP) works from a normal bridge network too.
-
-For a home server the simplest, most reliable setup is **host networking** — the container shares the host's network, discovers units, reaches them, and sees real client IPs (so LAN-only pairing approval works without extra config). The provided `docker-compose.yml` uses it.
-
-If you must use bridge networking, pair with explicit IPs (`setup_device.py --ip …`) and expose the port only to your proxy (`-p 127.0.0.1:8420:8420`).
-
-## 1. Pair your units (one-time)
-
-Config/state lives in the `/etc/breeze-core` volume. Run the pairing script once, with host networking so discovery works:
-
-```bash
-docker run --rm -it --network host \
-  -v breeze-config:/etc/breeze-core \
-  ghcr.io/monikapurpl3/breeze-core:latest \
-  python setup_device.py
-```
-It writes `config.json` into the volume and prints the API key once — **save it**. (For a single known unit: append `--ip 192.168.1.73`.)
-
-## 2. Run it
-
-```bash
-docker compose up -d          # uses docker-compose.yml (host networking + volume)
-docker compose logs -f
-```
-Or without compose:
 ```bash
 docker run -d --name breeze-core --restart unless-stopped --network host \
   -v breeze-config:/etc/breeze-core \
-  ghcr.io/monikapurpl3/breeze-core:latest \
-  uvicorn meow_ac.app:app --host 127.0.0.1 --port 8420
-```
-Health: `docker inspect --format '{{.State.Health.Status}}' breeze-core` → `healthy` once the UI answers.
+  -e TZ=Europe/Zagreb \
+  ghcr.io/monikapurpl3/breeze-core:latest
 
-## 3. Expose it (optional)
-
-Keep the container bound to `127.0.0.1` and put a reverse proxy in front — the wizard at [`deploy/reverse-proxy-wizard.sh`](../deploy/reverse-proxy-wizard.sh) generates it. Then set, in compose:
-```yaml
-environment:
-  AC_BEHIND_PROXY: "1"
-  AC_TRUSTED_HOSTS: "breeze.example.com,127.0.0.1"
+docker logs breeze-core          # prints the generated API key, once
+docker exec -it breeze-core breeze-setup
 ```
-See [REVERSE-PROXY.md](REVERSE-PROXY.md) and [HARDENING.md](../HARDENING.md).
+
+There is no pairing step to do first. On its very first start the container
+writes a config with a fresh API key (mode 640), prints it, and comes up
+serving — so the panel is reachable immediately and nothing crash-loops on a
+file that does not exist yet.
+
+`breeze-setup` then walks the whole of first-time setup: the API key, finding and
+pairing the air conditioners, admitting the first phone or browser, and — in the
+nginx image — the certificate and server name. Every step can be skipped, so it
+is also the "what was that command again" script later on.
+
+Or with compose, which has a service per image family:
+
+```bash
+docker compose up -d                    # latest (Alpine Edge, multi-arch)
+docker compose --profile https up -d    # the nginx image, HTTPS on 8443
+docker compose --profile ubi up -d      # UBI 9 / glibc
+```
+
+## `TZ` is not cosmetic
+
+Schedules and curves run on the server's local clock. Set `TZ` or they fire on
+UTC — an hour or two out, silently, all year.
+
+All five images carry the timezone database because of this. The previous images
+did not: `ubi-minimal` has no `tzdata`, so `TZ=Europe/Zagreb` resolved to UTC and
+`time.tzname` came back as the nonsensical `('Europe', 'Europe')`. Anything
+scheduled ran on the wrong clock with nothing in any log to say so.
+
+## The networking question (read this)
+
+Breeze Core talks to air conditioners on your LAN:
+
+- **Discovery** is a UDP **broadcast**, which does not leave Docker's default
+  bridge network. On the bridge the symptom is simply "no units found", which
+  looks like broken hardware.
+- **Control** — reaching a unit by address — works from a bridge network fine.
+- **LAN-only pairing approval** needs to see real client addresses.
+
+So: **host networking** for a home server. `docker-compose.yml` uses it. If you
+must use bridge networking, pair by address (`breeze-core pair --ip 192.168.1.50`)
+and publish the port only to your proxy (`-p 127.0.0.1:8420:8420`).
+
+## HTTPS, two ways
+
+**Bring your own proxy** (any image): keep the app on `127.0.0.1`, put nginx or
+Caddy in front, and set `AC_BEHIND_PROXY=1` plus `AC_TRUSTED_HOSTS`. See
+[REVERSE-PROXY.md](REVERSE-PROXY.md) and [HARDENING.md](../HARDENING.md). The
+wizard at [`deploy/reverse-proxy-wizard.sh`](../deploy/reverse-proxy-wizard.sh)
+writes the config for you.
+
+**Or use the bundled-nginx image**, which is the same thing pre-wired:
+
+```bash
+docker run -d --name breeze-core --restart unless-stopped --network host \
+  -v breeze-config:/etc/breeze-core \
+  -e TZ=Europe/Zagreb \
+  -e BREEZE_SERVER_NAME=breeze.lan \
+  -e BREEZE_PUBLIC_HTTPS_PORT=8443 \
+  ghcr.io/monikapurpl3/breeze-core:alpine-edge-nginx-x86_64
+```
+
+HTTPS on 8443, plain HTTP on 8080 redirecting to it, a self-signed certificate
+generated into the state volume on first start (the log prints its SHA-256 — worth
+comparing the first time a browser asks). Drop your own `fullchain.pem` and
+`privkey.pem` into `/etc/breeze-core/tls/` to use a real one instead; nothing
+overwrites an existing pair.
+
+Two details it gets right that are easy to get wrong by hand: `X-Forwarded-For`
+is set to `$remote_addr` rather than appended, so a client cannot forge its way
+into looking LAN-local; and `proxy_buffering` is off with a long read timeout, so
+the live view's SSE stream actually streams instead of appearing frozen.
+
+`BREEZE_PUBLIC_HTTPS_PORT` must be the port you actually publish — it is what the
+plain-HTTP listener redirects to, and the default `https://$host` would only be
+right if you mapped 8443 onto 443.
+
+## Alpine Edge keeps itself current
+
+Edge is a rolling branch, so an image of it starts going stale immediately.
+`BREEZE_EDGE_UPDATE` decides what the container does about that: `start` (the
+default) upgrades base packages once before the server starts; `daily` also checks
+every 24 hours and, if packages changed, **stops the container** so your restart
+policy brings it back on the new libraries; `off` never touches apk.
+
+Python is pinned to its minor series (`python3~3.14`), and that pin is what makes
+this safe: the venv holds extensions compiled for one interpreter minor, there is
+no compiler in the runtime image, and a jump to 3.15 would leave nothing
+importable. Patch releases, CPython security fixes included, still arrive.
+
+The self-update needs root, so the Alpine images start as root, run apk, fix the
+ownership of a fresh volume, then hand the server to uid 1001 via `su-exec` for
+the rest of its life. `--user 1001` skips all of that; the updater then reports
+itself skipped rather than failing quietly. The UBI images run as 1001 throughout
+and have no self-update.
 
 ## Notes
 
-- **Non-root:** runs as UID 1001 (group 0). A **bind-mounted** state dir must be writable by that UID (`chown 1001:0 ./state`); a **named volume** (as in compose) is initialized with the right ownership automatically.
-- **Secrets:** the `.dockerignore` keeps `config.json`/`devices.json`/`programs.json` out of the image; they live only in the volume.
-- **Read-only rootfs:** supported — add `read_only: true` and `tmpfs: /tmp` in compose; only `/etc/breeze-core` needs to be writable.
-- **Updates:** `docker compose pull && docker compose up -d`. Data persists in the volume.
+- **Non-root:** the server always runs as uid 1001. On UBI that is uid 1001 in
+  group 0 with a group-writable state dir, the convention for OpenShift's
+  arbitrary-UID policy. A **bind-mounted** state dir must be writable by that uid
+  (`chown 1001 ./state`); a **named volume** is fixed up automatically on the
+  Alpine images and initialised correctly by Docker on the UBI ones.
+- **The v3 image refuses to start** on a CPU without AVX2, naming the missing
+  flags and pointing at the v2 image — rather than dying of `SIGILL` from inside
+  some native wheel at an arbitrary later moment.
+- **Secrets:** `.dockerignore` keeps `config.json` / `devices.json` /
+  `programs.json` out of every image; they exist only in the volume.
+- **Read-only rootfs:** supported on the non-nginx images — add `read_only: true`
+  and `tmpfs: /tmp`; only `/etc/breeze-core` needs to be writable. The nginx image
+  needs `/tmp` writable too, which the tmpfs covers.
+- **Updates:** `docker compose pull && docker compose up -d`. State persists.
+- **Which image am I running?** The banner on every start says so, and
+  `docker exec <c> cat /etc/breeze-image.env` or
+  `docker inspect --format '{{index .Config.Labels "org.opencontainers.image.title"}}' <c>`
+  answers the same question from outside.
 
+## Why these bases
 
-## Why UBI 9 (and not Debian / Alpine / "distroless")?
+**Alpine Edge as the default.** It is the only one of the five that covers both
+architectures, it is the smallest, and — with the interpreter pin above — it can
+keep its own base current, which suits an appliance nobody logs into. Edge rather
+than a numbered release because the point of this image is current everything;
+if that sounds wrong for your box, the UBI images are the conservative option.
 
-The base image was a deliberate choice; the short version is **security patching + stability + a clean license, with glibc**:
+**UBI 9 for glibc.** Same RPM stream as RHEL, patched by Red Hat's product
+security team with published errata and a lifecycle into the 2030s, and
+[freely redistributable](https://www.redhat.com/en/blog/introducing-red-hat-universal-base-image),
+so publishing derived images is unambiguous. glibc also means PyPI's manylinux
+wheels apply — though these images compile their dependencies from source anyway,
+to target the psABI level in the tag.
 
-- **Enterprise-grade, no-cost security maintenance.** UBI is the same RPM stream as RHEL, patched by Red Hat's product-security team with published CVE errata and a long support lifecycle (RHEL 9 into the 2030s). You inherit that patch cadence for the OS layer without a subscription — UBI is [freely redistributable](https://www.redhat.com/en/blog/introducing-red-hat-universal-base-image). Debian's security is solid and community-run; the difference is the formal errata/lifecycle guarantees, which matter for a thing you expose to the internet.
-- **Stability.** A RHEL-pinned userland barely moves within a major version — the same reason it's a boring, dependable server base. Fewer surprise ABI/toolchain shifts between rebuilds than a fast-moving base.
-- **glibc, so wheels "just work".** Python's prebuilt **manylinux** wheels (pydantic-core, cryptography, aiohttp…) target glibc. UBI is glibc, so the default image installs binary wheels with no compiler. That's also why the **Alpine** variant is opt-in only — musl needs musllinux wheels or a from-source build (see the Alpine note below).
-- **Clean licensing.** UBI's terms explicitly allow redistribution of derived images, so publishing to a public registry is unambiguous.
-- **Rootless / OpenShift-friendly.** The image runs as a non-root UID in group 0 with a group-writable state dir — the UBI convention for arbitrary-UID platforms.
-
-Trade-offs, honestly: UBI minimal (~15 MB larger than Alpine) isn't the tiniest option, and it's a Red Hat ecosystem base rather than a community one. If you specifically want musl/smallest, build the [Alpine variant](#image-variants); if you want a different distro entirely, the app is plain Python + `uvicorn meow_ac.app:app` and will run on any base you like.
+**Why compile from source for v2/v3 at all.** PyPI's wheels are built for the
+*baseline* x86-64 — no SSE4.2, no AVX2 — because they must run anywhere. RHEL 9
+itself already requires x86-64-v2, so its Python sits a level above the wheels it
+would install. These images close that gap. The honest caveat: this workload is
+LAN-round-trip bound, so expect the gain to be small. The v3 image exists because
+the hardware is there, not because a profile demanded it.

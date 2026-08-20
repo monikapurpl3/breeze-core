@@ -1,0 +1,116 @@
+#!/bin/sh
+# breeze-setup — the whole first-time setup, in one place.
+#
+#   docker exec -it <container> breeze-setup
+#
+# Covers: the API key, pairing the air conditioners, admitting the first client,
+# and (in the nginx image only) the TLS certificate and server name. Each step
+# says what it is about to do and can be skipped, so it is safe to re-run: it is
+# the "I forgot what the next command was" script as much as a first-run wizard.
+set -eu
+
+. /etc/breeze-image.env
+CFG="${AC_CONFIG:-/etc/breeze-core/config.json}"
+BASE="${BREEZE_SETUP_BASE_URL:-http://127.0.0.1:8420}"
+
+bold()  { printf '\n\033[1m%s\033[0m\n' "$*"; }
+plain() { printf '  %s\n' "$*"; }
+ask()   {  # ask <prompt> <default>
+    printf '  %s [%s]: ' "$1" "$2"
+    read -r _a || _a=""
+    [ -n "$_a" ] && printf '%s' "$_a" || printf '%s' "$2"
+}
+yes_no() {  # yes_no <prompt> <default y|n>
+    printf '  %s (y/n) [%s]: ' "$1" "$2"
+    read -r _a || _a=""
+    [ -z "$_a" ] && _a="$2"
+    case "$_a" in y|Y|yes|YES) return 0 ;; *) return 1 ;; esac
+}
+
+if [ ! -t 0 ]; then
+    plain "breeze-setup needs a terminal -- it asks questions."
+    plain "Run it as:  docker exec -it <container> breeze-setup"
+    exit 1
+fi
+
+bold "Breeze Core ${BREEZE_VERSION:-} setup  --  ${BREEZE_IMAGE:-container}"
+plain "base ${BREEZE_BASE:-?} | ${BREEZE_LIBC:-?} | python ${BREEZE_PYTHON:-?}"
+
+# ------------------------------------------------------------------ 1. key
+bold "1) API key"
+if [ -f "$CFG" ]; then
+    key="$(python3 -c "import json,sys; print(json.load(open('$CFG')).get('api_key',''))")"
+    plain "already set: $key"
+else
+    plain "no config yet -- the container normally creates one on first start."
+    key="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+    umask 027
+    printf '{\n  "api_key": "%s",\n  "units": []\n}\n' "$key" > "$CFG"
+    chmod 640 "$CFG"
+    plain "created $CFG with key: $key"
+fi
+
+# ----------------------------------------------------------------- 2. units
+bold "2) Air conditioners"
+units="$(python3 -c "import json; print(len(json.load(open('$CFG')).get('units',[])))" 2>/dev/null || echo 0)"
+plain "$units unit(s) currently in the config."
+if yes_no "Discover and pair units on the LAN now?" "$([ "$units" = 0 ] && echo y || echo n)"; then
+    plain "broadcasting for Midea/OEM units..."
+    # Discovery is a UDP broadcast. On the default bridge network it goes
+    # nowhere -- the container is NATed off its own subnet -- and the symptom is
+    # simply "no units found", which looks like broken hardware. Say so up front
+    # rather than after the fact, and offer the by-IP path either way.
+    if breeze-core pair; then
+        plain "paired. config: $CFG"
+    else
+        plain "discovery found nothing."
+        plain "If this container is NOT on host networking, a UDP broadcast"
+        plain "cannot reach your LAN -- that is the usual cause. Either run the"
+        plain "container with --network host, or pair by address:"
+        plain "    breeze-core pair --ip 192.168.1.50"
+        if yes_no "Try one unit by IP now?" n; then
+            ip="$(ask 'unit IP' '192.168.1.50')"
+            breeze-core pair --ip "$ip" || plain "that address did not answer either."
+        fi
+    fi
+fi
+
+# --------------------------------------------------------------- 3. clients
+bold "3) Admit a phone or browser"
+plain "Clients enrol with the API key, then an admin on the LAN approves them."
+plain "Open the panel, enter the key, and a code appears. Then:"
+plain "    breeze-core approve <CODE>"
+plain "Already enrolled devices:  breeze-core devices"
+if yes_no "Approve a code now?" n; then
+    code="$(ask 'code from the client' '')"
+    [ -n "$code" ] && breeze-core approve "$code" || plain "skipped."
+fi
+
+# ------------------------------------------------------------------ 4. TLS
+if [ "${BREEZE_NGINX:-false}" = true ]; then
+    bold "4) TLS (this image bundles nginx)"
+    TLS_DIR="$(dirname "$CFG")/tls"
+    if [ -f "$TLS_DIR/fullchain.pem" ]; then
+        subj="$(openssl x509 -in "$TLS_DIR/fullchain.pem" -noout -subject 2>/dev/null || echo '?')"
+        plain "certificate present: $subj"
+        yes_no "Replace it?" n || { plain "keeping it."; exit_tls=1; }
+    fi
+    if [ "${exit_tls:-0}" != 1 ]; then
+        name="$(ask 'server name (DNS name or IP you will use)' "$(hostname)")"
+        breeze-tls-init "$name" force
+        plain "reloading nginx..."
+        nginx -s reload 2>/dev/null || plain "(could not reload; restart the container to apply)"
+    fi
+fi
+
+# --------------------------------------------------------------- 5. summary
+bold "Done"
+if [ "${BREEZE_NGINX:-false}" = true ]; then
+    plain "panel:  https://<this host>:${BREEZE_HTTPS_PORT:-8443}/"
+    plain "        (a self-signed certificate warns once; that is expected)"
+else
+    plain "panel:  http://<this host>:8420/"
+fi
+plain "key:    $key"
+plain "checks: breeze-core diag --auto"
+printf '\n'

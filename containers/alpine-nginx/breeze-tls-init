@@ -1,0 +1,70 @@
+#!/bin/sh
+# breeze-tls-init [server-name] [force] — the certificate and the two generated
+# nginx snippets, created in the state volume so they survive the container.
+#
+# A self-signed certificate is the right default for a LAN panel: there is no
+# public DNS name to prove and no CA that would issue for 192.168.x.x anyway.
+# Browsers warn once, you accept once. To use a real certificate instead, drop
+# fullchain.pem and privkey.pem into /etc/breeze-core/tls/ and restart — nothing
+# here overwrites an existing pair unless you pass 'force'.
+set -eu
+
+STATE="$(dirname "${AC_CONFIG:-/etc/breeze-core/config.json}")"
+TLS="$STATE/tls"
+CONF="$STATE/nginx"
+NAME="${1:-${BREEZE_SERVER_NAME:-$(hostname)}}"
+FORCE="${2:-}"
+# The port YOU published, which is what the plain-HTTP listener has to redirect
+# to. Getting this wrong is the classic bundled-TLS annoyance: a bare
+# "https://$host" is correct only if 8443 was mapped onto 443.
+PUBLIC_PORT="${BREEZE_PUBLIC_HTTPS_PORT:-8443}"
+
+mkdir -p "$TLS" "$CONF"
+
+# ------------------------------------------------------------------ snippets
+# Single-quoted heredocs: $host and $request_uri are nginx variables and must
+# reach the file unexpanded, not be eaten by this shell.
+printf 'server_name %s;\n' "$NAME" > "$CONF/server-name.conf"
+
+if [ "$PUBLIC_PORT" = "443" ]; then
+    cat > "$CONF/redirect.conf" <<'REDIR'
+return 301 https://$host$request_uri;
+REDIR
+else
+    { printf 'return 301 https://$host:%s$request_uri;\n' "$PUBLIC_PORT"; } \
+        > "$CONF/redirect.conf"
+fi
+
+# --------------------------------------------------------------- certificate
+if [ -f "$TLS/fullchain.pem" ] && [ -f "$TLS/privkey.pem" ] && [ "$FORCE" != force ]; then
+    echo "  tls: using the existing certificate in $TLS"
+else
+    # P-256 rather than RSA-2048: same practical security, much smaller and
+    # faster handshakes, and universally supported by anything from the last
+    # decade. 825 days is the longest a browser will accept for a leaf.
+    san="DNS:$NAME"
+    case "$NAME" in
+        *[0-9].[0-9]*) san="$san,IP:$NAME" ;;   # an address, not a hostname
+    esac
+    # localhost is always useful: the healthcheck and any curl from inside the
+    # container use it, and a cert that omits it fails those for no reason.
+    san="$san,DNS:localhost,IP:127.0.0.1"
+
+    openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 \
+        -sha256 -days 825 -nodes \
+        -subj "/CN=$NAME" -addext "subjectAltName=$san" \
+        -addext "basicConstraints=critical,CA:FALSE" \
+        -addext "keyUsage=critical,digitalSignature,keyEncipherment" \
+        -addext "extendedKeyUsage=serverAuth" \
+        -keyout "$TLS/privkey.pem" -out "$TLS/fullchain.pem" 2>/dev/null
+
+    chmod 600 "$TLS/privkey.pem"
+    chmod 644 "$TLS/fullchain.pem"
+    fp="$(openssl x509 -in "$TLS/fullchain.pem" -noout -fingerprint -sha256 \
+          | cut -d= -f2)"
+    echo "  tls: generated a self-signed certificate for $NAME"
+    echo "  tls: SAN $san"
+    echo "  tls: SHA-256 $fp"
+    echo "  tls: (compare that in the browser the first time; it is your only"
+    echo "        protection against being handed a different certificate)"
+fi

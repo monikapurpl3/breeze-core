@@ -1,0 +1,75 @@
+#!/bin/sh
+# edge-update — keep the Alpine Edge part of this image current.
+#
+# Alpine Edge is a rolling branch: the image is a snapshot of it, and the moment
+# it is published it starts going stale. This upgrades the base packages inside
+# the container (musl, openssl, busybox, ca-certificates, nginx where present)
+# without touching the Breeze Core tree, which comes from the image and is
+# versioned by the image tag.
+#
+# ---------------------------------------------------------------------------
+# WHY PYTHON IS PINNED, and why that is the whole trick:
+#
+# The venv contains compiled extensions named for one interpreter minor version
+# -- _pydantic_core.cpython-314-x86_64-linux-musl.so and friends. If apk moves
+# python3 from 3.14 to 3.15, every one of them stops being importable and the
+# container dies on the next restart with ModuleNotFoundError. There is no
+# compiler in the runtime image to rebuild them, and rebuilding at boot on a
+# home server is not a plan.
+#
+# So the build pins python3 to its MINOR series in /etc/apk/world:
+#
+#     python3~3.14
+#
+# apk honours that during upgrade, which gives exactly the split we want:
+# 3.14.x patch releases -- including CPython security fixes -- are installed,
+# while the 3.15 jump that would break the venv is refused. Crossing a minor is
+# an image rebuild, which is what pulling a new tag is for.
+#
+# apk cannot pin to a minor that Edge no longer carries, incidentally, so this
+# only ever works for the version the image was built against. Trying it for an
+# older series fails with "breaks: world[python3~3.12]".
+# ---------------------------------------------------------------------------
+set -eu
+
+[ "$(id -u)" = 0 ] || {
+    echo "  edge self-update: skipped (needs root; this container runs as $(id -u))"
+    exit 0
+}
+
+before="$(apk list -I 2>/dev/null | sort)"
+
+if ! apk update >/dev/null 2>&1; then
+    echo "  edge self-update: no network for the package index -- skipped"
+    exit 0
+fi
+
+# --available, not a plain upgrade: on a rolling branch packages get rebuilt
+# against newer libraries without a version bump, and --available catches those
+# too instead of quietly leaving them behind.
+if ! out="$(apk upgrade --available 2>&1)"; then
+    echo "  edge self-update: apk could not solve an upgrade --"
+    echo "$out" | sed 's/^/    /' | tail -5
+    echo "    (nothing was changed. If it mentions world[python3~...], Edge has"
+    echo "     moved past this image's interpreter series: pull a newer tag.)"
+    exit 0
+fi
+
+after="$(apk list -I 2>/dev/null | sort)"
+changed="$(printf '%s\n%s\n' "$before" "$after" | sort | uniq -u \
+           | awk '{print $1}' | sed 's/-[0-9][^-]*-r[0-9]*$//' | sort -u | tr '\n' ' ')"
+
+if [ -z "$changed" ]; then
+    echo "  edge self-update: already current"
+else
+    echo "  edge self-update: updated ${changed}"
+fi
+
+# An upgrade that leaves the app unable to import is worth knowing about
+# immediately, not at 3am when the container restarts. Note the wording: this
+# checks the tree we are ABOUT to run, before the server starts.
+if ! /opt/breeze/venv/bin/python3 -c 'import fastapi, uvicorn, msmart, pydantic_core' 2>/dev/null; then
+    echo "  edge self-update: WARNING -- the app no longer imports after that upgrade."
+    echo "    This should not happen while python3 is pinned to its minor series."
+    echo "    Pull a fresh image tag; report it if a fresh tag does the same."
+fi

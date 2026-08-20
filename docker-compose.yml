@@ -1,29 +1,81 @@
-# Breeze Core — example Compose. See docs/DOCKER.md for pairing + networking.
+# Breeze Core — example Compose, one service per image family.
 #
-# Host networking is the simplest choice on a Linux host: it lets the app
-# discover (UDP broadcast) and reach your Midea units, and it sees real
-# client IPs so LAN-only pairing approval works directly. Bind 127.0.0.1
-# and front it with a reverse proxy (see docs/REVERSE-PROXY.md), or bind
-# your LAN IP for LAN-only use.
+#   docker compose up -d                      # the multi-arch Alpine Edge image
+#   docker compose --profile https  up -d     # bundled nginx, HTTPS on 8443
+#   docker compose --profile ubi    up -d     # glibc / UBI 9, x86-64-v2
+#   docker compose --profile ubi-v3 up -d     # the same, compiled for AVX2 CPUs
+#
+# Then, whichever you started:
+#
+#   docker compose logs breeze-core                  # the first-run API key
+#   docker compose exec breeze-core breeze-setup     # pair units, admit a client
+#
+# (swap breeze-core for breeze-core-https / -ubi / -ubi-v3 if you started one of
+# those profiles. No fixed container names are set: the default service is always
+# active, so a fixed name collides the moment a profile is enabled.)
+#
+# The five images and how to choose between them: containers/README.md
+
+x-common: &common
+  restart: unless-stopped
+  # Host networking is the simplest choice on a Linux host, and for this app it
+  # is very nearly required: discovery is a UDP broadcast, which does not leave
+  # the default bridge network, and LAN-only pairing approval has to see real
+  # client addresses. On the bridge the symptom is just "no units found".
+  network_mode: host
+  environment: &common-env
+    # Not cosmetic: schedules and curves run on the server's local clock, so
+    # without this they fire on UTC.
+    TZ: Europe/Zagreb
+    AC_ENROLL_LAN_ONLY: "1"
+  volumes:
+    - breeze-config:/etc/breeze-core
 
 services:
+  # ------------------------------------------------------------------ default
   breeze-core:
-    # pull the published image, or build locally with `docker compose build`:
+    <<: *common
     image: ghcr.io/monikapurpl3/breeze-core:latest
-    build: .
-    container_name: breeze-core
-    restart: unless-stopped
-    network_mode: host
+    # Bind the LAN address, or keep 127.0.0.1 and front it with your own proxy
+    # (docs/REVERSE-PROXY.md). With host networking, 0.0.0.0 means every
+    # interface — WAN included — which is not what you want.
+    command: ["/opt/breeze/venv/bin/uvicorn", "meow_ac.app:app",
+              "--host", "127.0.0.1", "--port", "8420"]
+
+  # --------------------------------------------------- bundled nginx (HTTPS)
+  breeze-core-https:
+    <<: *common
+    profiles: ["https"]
+    image: ghcr.io/monikapurpl3/breeze-core:alpine-edge-nginx-x86_64
     environment:
-      # Set these when behind a reverse proxy (see docs/REVERSE-PROXY.md):
-      # AC_BEHIND_PROXY: "1"
-      # AC_TRUSTED_HOSTS: "breeze.example.com,127.0.0.1"
-      AC_ENROLL_LAN_ONLY: "1"
-    volumes:
-      - breeze-config:/etc/breeze-core
-    # Behind a host reverse proxy → bind loopback. For LAN-only use, replace
-    # 127.0.0.1 with your host's LAN IP.
-    command: ["uvicorn", "meow_ac.app:app", "--host", "127.0.0.1", "--port", "8420"]
+      <<: *common-env
+      # The name that goes in the self-signed certificate, and the port the
+      # plain-HTTP listener redirects to. Set the port to whatever you actually
+      # publish, or the redirect sends browsers where nothing is listening.
+      BREEZE_SERVER_NAME: breeze.lan
+      BREEZE_PUBLIC_HTTPS_PORT: "8443"
+      # 'daily' also stops the container when packages change, so the restart
+      # policy above brings it back up running them. 'off' to never touch apk.
+      BREEZE_EDGE_UPDATE: start
+    # No command override: this image runs nginx and the app together, with the
+    # app itself listening on loopback only.
+
+  # --------------------------------------------------------------- UBI 9 glibc
+  breeze-core-ubi:
+    <<: *common
+    profiles: ["ubi"]
+    image: ghcr.io/monikapurpl3/breeze-core:ubi9-x86-64-v2
+    command: ["/opt/breeze/venv/bin/uvicorn", "meow_ac.app:app",
+              "--host", "127.0.0.1", "--port", "8420"]
+
+  breeze-core-ubi-v3:
+    <<: *common
+    profiles: ["ubi-v3"]
+    # Refuses to start on a CPU without AVX2, instead of dying of SIGILL
+    # somewhere unhelpful later.
+    image: ghcr.io/monikapurpl3/breeze-core:ubi9-x86-64-v3
+    command: ["/opt/breeze/venv/bin/uvicorn", "meow_ac.app:app",
+              "--host", "127.0.0.1", "--port", "8420"]
 
 volumes:
   breeze-config:

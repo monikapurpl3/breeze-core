@@ -1,0 +1,12 @@
+#!/bin/sh
+# Breeze Core CLI inside the container: pair / approve / devices / revoke / diag.
+#
+#   docker exec -it <container> breeze-core pair
+#   docker exec -it <container> breeze-core approve <CODE>
+#   docker exec    <container> breeze-core devices
+#
+# The subcommand is `pair`, not `setup` — `breeze-setup` is the wizard that
+# wraps all of this, and is usually what you want first.
+PYTHONPATH=/opt/breeze/app
+export PYTHONPATH
+exec /opt/breeze/venv/bin/python3 -m meow_ac.cli "$@"

@@ -1,0 +1,119 @@
+name: Containers
+
+# Five images, each built and pushed under a name that says what it is.
+# containers/build.sh owns the tag scheme; this workflow only decides which
+# target runs where, so the two can never drift apart.
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io/${{ github.repository }}
+
+jobs:
+  # UBI 9 compiles every dependency from source at a psABI level, which is slow
+  # by design — so it is cached hard and skipped entirely on pull requests.
+  ubi9:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        level: [x86-64-v2, x86-64-v3]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push (${{ matrix.level }})
+        env:
+          REGISTRY: ${{ env.REGISTRY }}
+          # Only a release tag gets the pinnable -<version> tags; see build.sh.
+          VERSION_TAG: ${{ startsWith(github.ref, 'refs/tags/v') && '1' || '0' }}
+        run: |
+          case "${{ matrix.level }}" in
+            x86-64-v2) target=ubi9-v2 ;;
+            x86-64-v3) target=ubi9-v3 ;;
+          esac
+          containers/build.sh --push "$target"
+
+  # amd64 Alpine and the nginx image in one job: the nginx image layers on the
+  # plain one by local tag, so building them together avoids shipping an image
+  # between jobs just to add nginx to it.
+  alpine-amd64:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        if: github.event_name != 'pull_request'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build${{ github.event_name != 'pull_request' && ' and push' || '' }}
+        env:
+          REGISTRY: ${{ env.REGISTRY }}
+          VERSION_TAG: ${{ startsWith(github.ref, 'refs/tags/v') && '1' || '0' }}
+        run: |
+          push=""
+          [ "${{ github.event_name }}" != pull_request ] && push=--push
+          containers/build.sh $push alpine-amd64 alpine-nginx
+      - name: Smoke-test the images
+        run: containers/test.sh alpine-edge-x86_64 alpine-edge-nginx-x86_64
+
+  # A native arm64 runner, not QEMU. Emulating a Rust build of pydantic-core is
+  # the difference between a couple of minutes and most of an hour, and the
+  # arm64 image exists precisely for people on real arm64 hardware.
+  alpine-arm64:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        if: github.event_name != 'pull_request'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build${{ github.event_name != 'pull_request' && ' and push' || '' }}
+        env:
+          REGISTRY: ${{ env.REGISTRY }}
+          VERSION_TAG: ${{ startsWith(github.ref, 'refs/tags/v') && '1' || '0' }}
+        run: |
+          push=""
+          [ "${{ github.event_name }}" != pull_request ] && push=--push
+          containers/build.sh $push alpine-arm64
+      - name: Smoke-test the image
+        run: containers/test.sh alpine-edge-aarch64
+
+  # `alpine-edge` and `latest` are manifest lists over the two Alpine images, so
+  # they can only be built once both have been pushed.
+  manifests:
+    if: github.event_name != 'pull_request'
+    needs: [alpine-amd64, alpine-arm64]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Assemble the multi-arch tags
+        env:
+          REGISTRY: ${{ env.REGISTRY }}
+          VERSION_TAG: ${{ startsWith(github.ref, 'refs/tags/v') && '1' || '0' }}
+        run: containers/build.sh --push manifests

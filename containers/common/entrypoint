@@ -1,0 +1,154 @@
+#!/bin/sh
+# Breeze Core container entrypoint — identity, safety checks, first-run config.
+#
+# Everything here is about the first thirty seconds of a container's life: say
+# WHICH image this is, refuse to start in ways that would only be confusing
+# later, and make sure a fresh container comes up serving instead of
+# crash-looping on a config file nobody has written yet.
+set -eu
+
+. /etc/breeze-image.env    # BREEZE_IMAGE, BREEZE_LIBC, BREEZE_PYTHON, ...
+
+CFG="${AC_CONFIG:-/etc/breeze-core/config.json}"
+STATE="$(dirname "$CFG")"
+RUN_UID="${BREEZE_UID:-1001}"
+RUN_GID="${BREEZE_GID:-1001}"
+
+# ------------------------------------------------------------------ identity
+# Printed on every start, because "which of the five images is this" is the
+# first question whenever something behaves unexpectedly -- and `docker logs`
+# is where people look. The same facts are in the image labels and in
+# /etc/breeze-image.env.
+banner() {
+    echo "============================================================"
+    echo "  Breeze Core ${BREEZE_VERSION:-?}"
+    echo "  image .......... ${BREEZE_IMAGE:-?}"
+    echo "  base ........... ${BREEZE_BASE:-?}  (${BREEZE_LIBC:-?})"
+    echo "  python ......... ${BREEZE_PYTHON:-?}"
+    [ -n "${BREEZE_ARCH_LEVEL:-}" ] && \
+    echo "  built for ...... ${BREEZE_ARCH_LEVEL} (needs: ${BREEZE_REQUIRED_CPU_FLAGS:-none})"
+    [ "${BREEZE_NGINX:-false}" = true ] && \
+    echo "  nginx .......... bundled, TLS on :${BREEZE_HTTPS_PORT:-8443} -> 127.0.0.1:8420"
+    [ "${BREEZE_EDGE_UPDATE:-off}" != off ] && \
+    echo "  edge update .... ${BREEZE_EDGE_UPDATE}"
+    echo "  running as ..... uid $(id -u)"
+    echo "============================================================"
+}
+
+# ----------------------------------------------------------------- CPU guard
+# A -march=x86-64-v3 build on a pre-Haswell CPU dies with SIGILL from deep
+# inside some native wheel: "Illegal instruction", no explanation, on a host
+# where the v2 image would have been perfectly fine. Check the flags this build
+# actually needs and say it in words instead.
+check_cpu() {
+    [ -n "${BREEZE_REQUIRED_CPU_FLAGS:-}" ] || return 0
+    [ -r /proc/cpuinfo ] || return 0
+    have="$(awk '/^flags/ {print; exit}' /proc/cpuinfo)"
+    missing=""
+    for f in $(echo "$BREEZE_REQUIRED_CPU_FLAGS" | tr ',' ' '); do
+        case " $have " in *" $f "*) ;; *) missing="$missing $f" ;; esac
+    done
+    [ -z "$missing" ] && return 0
+    echo
+    echo "  This image is built for ${BREEZE_ARCH_LEVEL:-a newer x86-64 level} and this CPU lacks:$missing"
+    echo "  Refusing to start: a native wheel would SIGILL at some random later"
+    echo "  moment instead. Use the broader image:"
+    echo
+    echo "      ${BREEZE_FALLBACK_IMAGE:-ghcr.io/monikapurpl3/breeze-core:ubi9-x86-64-v2}"
+    echo
+    exit 1
+}
+
+# ------------------------------------------------------- fresh-volume owner
+# A named volume mounted over the state directory comes up root-owned the first
+# time, and a non-root app then cannot write devices.json -- "permission
+# denied" ten seconds after a clean install. It can only be fixed while still
+# root, which is the case in the Alpine images at this point.
+fix_state_owner() {
+    [ "$(id -u)" = 0 ] || return 0
+    chown -R "$RUN_UID:$RUN_GID" "$STATE" 2>/dev/null || true
+}
+
+# -------------------------------------------------------------- first run
+# Without this a brand-new container exits immediately: there is no
+# config.json, so the app raises its setup guidance and the container
+# restart-loops before anyone can read it. Generate a valid minimal config,
+# print the key once, and come up serving -- the panel and the pairing flow
+# then work from a browser straight away.
+first_run() {
+    [ -d "$STATE" ] || mkdir -p "$STATE" 2>/dev/null || true
+    [ -f "$CFG" ] && return 0
+
+    key="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+    umask 027
+    printf '{\n  "api_key": "%s",\n  "units": []\n}\n' "$key" > "$CFG"
+    # 640, not 644: this file holds the enrolment secret.
+    chmod 640 "$CFG" 2>/dev/null || true
+    [ "$(id -u)" = 0 ] && chown "$RUN_UID:$RUN_GID" "$CFG" 2>/dev/null || true
+
+    cat <<BANNER
+
+  ===================== FIRST RUN =====================
+  Created $CFG
+
+      API key:  $key
+
+  Clients need that key to enrol. To pair your air
+  conditioners and admit a phone or browser, run the
+  setup script -- it covers everything:
+
+      docker exec -it <container> breeze-setup
+
+  =====================================================
+
+BANNER
+}
+
+# ----------------------------------------------------- alpine edge updates
+edge_update_now() {
+    [ "${BREEZE_EDGE_UPDATE:-off}" = off ] && return 0
+    [ -x /usr/local/bin/edge-update ] || return 0
+    /usr/local/bin/edge-update || echo "  (edge self-update failed; continuing as built)"
+}
+
+# 'daily' keeps a rolling base honest over months of uptime. When an upgrade
+# actually changes something it stops the container, because that is the only
+# way the running processes pick the new libraries up -- the upgrade alone
+# just replaces files under a process that has already mapped the old ones.
+# Needs a restart policy (restart: unless-stopped); without one the container
+# stays down, which is why this is opt-in and not the default.
+edge_update_daily_loop() {
+    [ "${BREEZE_EDGE_UPDATE:-off}" = daily ] || return 0
+    [ "$(id -u)" = 0 ] || return 0
+    (
+        while :; do
+            sleep "${BREEZE_EDGE_INTERVAL:-86400}"
+            out="$(/usr/local/bin/edge-update 2>&1 || true)"
+            echo "$out"
+            case "$out" in
+                *"updated "*)
+                    echo "  edge self-update: packages changed -- stopping so the"
+                    echo "  restart policy brings the container back on them."
+                    kill -TERM 1 2>/dev/null || true
+                    exit 0 ;;
+            esac
+        done
+    ) &
+}
+
+banner
+check_cpu
+fix_state_owner
+first_run
+edge_update_now
+edge_update_daily_loop
+
+# --------------------------------------------------------- drop privileges
+# The Alpine images start as root for exactly two reasons -- apk needs it, and
+# so does chowning a fresh volume -- then hand off to the service account for
+# the entire life of the actual server. Start the container with --user 1001 to
+# skip both (self-update then reports itself skipped, which is honest).
+if [ "$(id -u)" = 0 ] && command -v su-exec >/dev/null 2>&1; then
+    exec su-exec "$RUN_UID:$RUN_GID" "$@"
+fi
+exec "$@"

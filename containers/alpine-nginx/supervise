@@ -1,0 +1,75 @@
+#!/bin/sh
+# supervise — run nginx and the app in one container, and die together.
+#
+# Two processes in a container is a deliberate exception, not a habit: the whole
+# point of this image is that TLS works out of the box, and a sidecar would move
+# the certificate, the port and the proxy headers back into the user's compose
+# file, which is exactly the fiddly part being removed.
+#
+# The rule that keeps it honest: if either process exits, this exits. No
+# restarting a child in place, no carrying on half-dead pretending to be
+# healthy — the container's restart policy is the supervisor of record.
+set -eu
+
+APP_HOST=127.0.0.1
+APP_PORT=8420
+
+# nginx needs these to exist before it starts; they live under /tmp because the
+# whole thing runs unprivileged and /var/lib/nginx is not writable.
+mkdir -p /tmp/nginx/body /tmp/nginx/proxy /tmp/nginx/fastcgi /tmp/nginx/uwsgi /tmp/nginx/scgi
+
+# The certificate and the two generated snippets. Without this nginx fails its
+# config test on a missing include, which reads as a broken image rather than a
+# first run.
+breeze-tls-init "${BREEZE_SERVER_NAME:-$(hostname)}"
+
+if ! nginx -t 2>/tmp/nginx-test.log; then
+    echo "  nginx rejected its configuration:"
+    sed 's/^/    /' /tmp/nginx-test.log
+    exit 1
+fi
+
+# --proxy-headers plus --forwarded-allow-ips: without them uvicorn ignores
+# X-Forwarded-For and every request looks like it came from 127.0.0.1 -- which
+# breaks LAN-only pairing approval in the confusing direction, by making
+# everything look local. Only nginx on loopback is trusted to set it, and nginx
+# overwrites the header with $remote_addr rather than appending.
+/opt/breeze/venv/bin/uvicorn meow_ac.app:app \
+    --host "$APP_HOST" --port "$APP_PORT" \
+    --proxy-headers --forwarded-allow-ips 127.0.0.1 &
+app_pid=$!
+
+nginx -g 'daemon off;' &
+nginx_pid=$!
+
+# Signals have to be forwarded by hand: this script is PID 1, and PID 1 gets no
+# default handlers, so an unhandled SIGTERM means `docker stop` waits its full
+# ten seconds and then kills the container -- losing the app's graceful shutdown
+# (and the scheduler's) every single time.
+stopping=0
+on_term() {
+    stopping=1
+    kill -TERM "$nginx_pid" 2>/dev/null || true
+    kill -TERM "$app_pid"   2>/dev/null || true
+}
+trap on_term TERM INT
+
+# `wait -n` is not in POSIX sh and busybox ash has only had it recently, so poll
+# instead: two kill -0 checks a second apart cost nothing and work everywhere.
+while :; do
+    if ! kill -0 "$app_pid" 2>/dev/null; then
+        wait "$app_pid" 2>/dev/null || true
+        [ "$stopping" = 1 ] || echo "  the app exited -- stopping the container"
+        kill -TERM "$nginx_pid" 2>/dev/null || true
+        wait "$nginx_pid" 2>/dev/null || true
+        exit 0
+    fi
+    if ! kill -0 "$nginx_pid" 2>/dev/null; then
+        wait "$nginx_pid" 2>/dev/null || true
+        [ "$stopping" = 1 ] || echo "  nginx exited -- stopping the container"
+        kill -TERM "$app_pid" 2>/dev/null || true
+        wait "$app_pid" 2>/dev/null || true
+        exit 0
+    fi
+    sleep 1
+done
