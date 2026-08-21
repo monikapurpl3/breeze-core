@@ -1,2 +1,9 @@
 * text=auto eol=lf
 *.zsh text eol=lf
+
+# The build stamp reported by /api/version. `git archive` substitutes %h here, so
+# a source tarball names the commit it was cut from -- without this the tarball
+# carried whatever hash happened to be committed to the file, which was weeks
+# stale and reported as the running build on every from-source install (BSD,
+# OpenBSD, macOS) and in the OPNsense plugin.
+meow_ac/_commit.txt export-subst
