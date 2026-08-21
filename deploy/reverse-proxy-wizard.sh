@@ -23,7 +23,7 @@
 #     -h, --help
 #
 # For acme.sh users: issue/install your cert with acme.sh (see
-# docs/REVERSE-PROXY.md), then re-run this with --cert existing --cert-file … --key-file …
+# https://github.com/monikapurpl3/breeze-core/wiki/Reverse-proxy-and-TLS), then re-run this with --cert existing --cert-file … --key-file …
 
 set -euo pipefail
 
@@ -199,7 +199,7 @@ cat <<NEXT
      AC_ENROLL_LAN_ONLY=1
    and bind uvicorn to $UP_HOST ( --proxy-headers --forwarded-allow-ips 127.0.0.1 ),
    then restart it. Open 80/443 in your firewall and close direct $UP_PORT.
-   Review HARDENING.md, and add the fail2ban jails watching
+   Review https://github.com/monikapurpl3/breeze-core/wiki/Exposing-it-safely, and add the fail2ban jails watching
    /var/log/${SERVER/apache/$apache_svc}/${DOMAIN}.access.log.
 NEXT
 (( DRYRUN )) && { echo; say "dry run complete — nothing was changed."; }

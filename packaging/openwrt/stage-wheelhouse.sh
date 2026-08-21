@@ -126,7 +126,7 @@ mostly a record of what went wrong. The short version:
   headers and reports a nonsense symbol-table size *after* a successful compile.
   \`--compatibility linux\` skips an audit that is meaningless here anyway.
 
-Full reasoning: \`docs/POC-CROSS-BUILDS.md\`.
+Full reasoning: \`https://github.com/monikapurpl3/breeze-core/wiki/Proof-of-concept-architectures\`.
 
 Bugs: https://github.com/monikapurpl3/breeze-core/issues
 NOTES

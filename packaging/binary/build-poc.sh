@@ -184,7 +184,7 @@ $arch guest during the build, and the build fails if that step does not print.
 - **Not supported, not updated.** No package repository, no signature, no
   upgrade path. It will not track future releases.
 - **Not a system install.** No systemd unit, no service account, no
-  \`/etc/breeze-core\`. See \`docs/INSTALL.md\` for what a real deployment does.
+  \`/etc/breeze-core\`. See \`https://github.com/monikapurpl3/breeze-core/wiki/Installing-from-source\` for what a real deployment does.
 - **Not performance-tested** on this architecture.
 
 ## Running it
@@ -213,7 +213,7 @@ are mostly a record of what went wrong. The short version, for $arch:
   \`cc1\` on s390x and in \`collect2\` on ppc64le. clang got through both.
   Setting \`CC\` alone is not enough — \`LDSHARED\` drives setuptools' link step
   and \`RUSTFLAGS -C linker\` drives rustc's, which otherwise calls plain \`cc\`.
-- \`docs/POC-CROSS-BUILDS.md\` argues that all of the above is better solved by
+- \`https://github.com/monikapurpl3/breeze-core/wiki/Proof-of-concept-architectures\` argues that all of the above is better solved by
   cross-building the native wheels on the host instead. If you are starting
   fresh, start there.
 

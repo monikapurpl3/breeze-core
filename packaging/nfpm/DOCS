@@ -1,0 +1,27 @@
+Breeze Core — documentation
+===========================
+
+The full documentation is the project wiki:
+
+    https://github.com/monikapurpl3/breeze-core/wiki
+
+Start here
+    First run and pairing .. wiki/First-run-and-pairing
+    The web panel ......... wiki/The-web-panel
+    Schedules and curves .. wiki/Programs-schedules-and-curves
+
+Reference
+    Configuration ......... wiki/Configuration
+    REST API .............. wiki/REST-API
+    Control schema ........ wiki/Control-schema
+    Authentication ........ wiki/Authentication-and-pairing
+
+Running it safely
+    Exposing it safely .... wiki/Exposing-it-safely
+    Reverse proxy and TLS . wiki/Reverse-proxy-and-TLS
+    Troubleshooting ....... wiki/Troubleshooting
+
+Locally, without a browser:
+    breeze-core --help
+    breeze-core diag --auto
+    man breeze-core            (if your package ships the man page)

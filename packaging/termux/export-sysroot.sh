@@ -5,7 +5,7 @@
 #   packaging/termux/export-sysroot.sh aarch64 > termux-sysroot-aarch64.tar
 #
 # ── Why this is small, and why there is no NDK download ──────────────────────
-# docs/POC-CROSS-BUILDS.md assumed cross-building for Android meant fetching the
+# https://github.com/monikapurpl3/breeze-core/wiki/Proof-of-concept-architectures assumed cross-building for Android meant fetching the
 # ~700 MB Android NDK. probe-target.sh showed otherwise: Termux ships an
 # `ndk-sysroot` package (r29, API 24) because on-device compilation is a
 # first-class use case there — clang plus that sysroot is how Termux users build

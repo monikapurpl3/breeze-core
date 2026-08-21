@@ -6,7 +6,7 @@
     The Windows counterpart of deploy/reverse-proxy-wizard.sh. Downloads the
     official Caddy binary, renders a hardened Caddyfile (automatic HTTPS via
     Let's Encrypt, HSTS + security headers, LAN-only admin gate, and the
-    X-Forwarded-For OVERWRITE required by HARDENING.md), rebinds the Breeze
+    X-Forwarded-For OVERWRITE required by https://github.com/monikapurpl3/breeze-core/wiki/Exposing-it-safely), rebinds the Breeze
     Core service to loopback behind the proxy, registers Caddy as a Windows
     service, and opens 80/443. Optionally installs the fail2ban-style tripwire.
 
@@ -88,7 +88,7 @@ Info "Access log : $accessLog"
 #    here to avoid duplicate/conflicting CSP.
 #  * With NO trusted_proxies set, Caddy overwrites X-Forwarded-For with the real
 #    peer (verified: a forged XFF is dropped), so an outsider can't forge a
-#    private "LAN" client - the overwrite HARDENING.md requires. Keep it that way.
+#    private "LAN" client - the overwrite https://github.com/monikapurpl3/breeze-core/wiki/Exposing-it-safely requires. Keep it that way.
 #  * Admin endpoints are 403'd unless the client is on the LAN - the app also
 #    enforces this; the proxy 403 is what the tripwire watches for.
 $caddyfileText = @"
@@ -135,7 +135,7 @@ $Domain {
 	# Everything else -> the app. Caddy sets X-Forwarded-For to the real peer for
 	# us: with NO trusted_proxies configured, every client is untrusted, so a
 	# client-sent (forged) XFF is dropped and replaced with the real IP - exactly
-	# the overwrite HARDENING.md requires. Do NOT add public ranges to trusted_proxies.
+	# the overwrite https://github.com/monikapurpl3/breeze-core/wiki/Exposing-it-safely requires. Do NOT add public ranges to trusted_proxies.
 	reverse_proxy $Upstream {
 		header_up X-Real-IP {remote_host}
 	}
@@ -234,4 +234,4 @@ if ($SetupTripwire) {
 Write-Host ""
 Info "Done. Point $Domain's DNS at this host (A/AAAA), open ports 80/443 at your router,"
 Info "then browse to https://$Domain - Caddy fetches the certificate automatically."
-Info "Review the go-live checklist in HARDENING.md before announcing the hostname."
+Info "Review the go-live checklist in https://github.com/monikapurpl3/breeze-core/wiki/Exposing-it-safely before announcing the hostname."

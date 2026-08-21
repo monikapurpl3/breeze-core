@@ -7,7 +7,7 @@
     bundled NSSM. Runs as the low-privilege LOCAL SERVICE account, keeps state
     in %ProgramData%\breeze-core with locked-down ACLs, and (for LAN mode) opens
     only a LocalSubnet firewall rule for the port. This is the Windows analogue
-    of the systemd unit in docs/INSTALL.md; see HARDENING.md for the model.
+    of the systemd unit in https://github.com/monikapurpl3/breeze-core/wiki/Installing-from-source; see https://github.com/monikapurpl3/breeze-core/wiki/Exposing-it-safely for the model.
 
     Called by the NSIS installer, but fully usable on its own.
 
@@ -227,7 +227,7 @@ function Do-Install {
         if ($LockEgress) {
             # Best-effort egress lockdown: block the server binary from reaching
             # Internet-classified addresses (LAN/Intranet still allowed). See
-            # HARDENING.md sec.7 for caveats on Windows network classification.
+            # https://github.com/monikapurpl3/breeze-core/wiki/Exposing-it-safely sec.7 for caveats on Windows network classification.
             Get-NetFirewallRule -DisplayName "Breeze Core egress lockdown" -ErrorAction SilentlyContinue | Remove-NetFirewallRule
             New-NetFirewallRule -DisplayName "Breeze Core egress lockdown" -Direction Outbound -Action Block `
                 -Program $venvPy -RemoteAddress Internet -Profile Any | Out-Null

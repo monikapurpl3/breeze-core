@@ -9,7 +9,7 @@
 #       packaging/out/poc/wheelhouse/mips64le
 #
 # The Debian-target sibling of packaging/termux/cross-wheel.sh. See
-# docs/POC-CROSS-BUILDS.md; this is step 2 of §5.
+# https://github.com/monikapurpl3/breeze-core/wiki/Proof-of-concept-architectures; this is step 2 of §5.
 #
 # ── Why MIPS cannot be done any other way ───────────────────────────────────
 # Not merely slow — impossible in-place. Debian bookworm on mips64el ships

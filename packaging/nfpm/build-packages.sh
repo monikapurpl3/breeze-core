@@ -47,7 +47,7 @@ package_streamed() {
   # packaged, and the files the tarball embeds. Sending every bundle would
   # push a quarter of a gigabyte through the pipe per target.
   tar -cf - packaging/nfpm packaging/tarball "packaging/out/bundle-$libc-$arch" \
-      meow_ac/__init__.py README.md HARDENING.md LICENSE \
+      meow_ac/__init__.py README.md https://github.com/monikapurpl3/breeze-core/wiki/Exposing-it-safely LICENSE \
     | MSYS_NO_PATHCONV=1 docker run -i --rm bc-nfpm bash -c "
         set -e
         mkdir -p /work && tar -xf - -C /work && cd /work

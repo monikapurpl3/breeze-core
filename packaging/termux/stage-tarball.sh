@@ -95,7 +95,7 @@ entrypoint (settings are passed as a file in the tar instead), and \`pkg\`
 rotates mirrors on every invocation regardless of \`sources.list\` — one run
 pulled from six different hosts at a crawl. Use \`apt-get\`.
 
-Full reasoning: \`docs/POC-CROSS-BUILDS.md\`.
+Full reasoning: \`https://github.com/monikapurpl3/breeze-core/wiki/Proof-of-concept-architectures\`.
 
 Bugs: https://github.com/monikapurpl3/breeze-core/issues
 NOTES

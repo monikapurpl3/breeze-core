@@ -75,8 +75,11 @@ contents:
 
   - src: README.md
     dst: /usr/share/doc/breeze-core/README.md
-  - src: HARDENING.md
-    dst: /usr/share/doc/breeze-core/HARDENING.md
+  # The hardening runbook used to be shipped here as a file. It lives in the
+  # wiki now, so the package carries a pointer rather than a copy that would go
+  # stale the first time that page is edited.
+  - src: packaging/nfpm/DOCS
+    dst: /usr/share/doc/breeze-core/DOCS
   - src: LICENSE
     dst: /usr/share/doc/breeze-core/LICENSE
 

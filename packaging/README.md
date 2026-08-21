@@ -3,7 +3,7 @@
 Binary-first pipeline: build the app **once per (libc, arch)** as a
 self-contained PyInstaller bundle, wrap those four bundles into every native
 package format, then install-test the results on real distro userlands.
-User docs: [docs/PACKAGES.md](../docs/PACKAGES.md).
+User docs: [https://github.com/monikapurpl3/breeze-core/wiki/Installing-from-packages](https://github.com/monikapurpl3/breeze-core/wiki/Installing-from-packages).
 
 ```
 binary/    launcher.py (serve/pair/version CLI), PyInstaller spec,
@@ -19,7 +19,7 @@ openwrt/   procd init + build-ipk.sh — real .ipk from the musl bundles
 opnsense/  os-breeze-core plugin: rc script, configd actions + template, MVC
            page/menu/ACL, build-plugin.sh + verify-plugin.sh. Its own build,
            not the FreeBSD package: OPNsense is FreeBSD:14 with python311 and
-           no rust or pip, so the runtime is vendored (docs/OPNSENSE.md)
+           no rust or pip, so the runtime is vendored (https://github.com/monikapurpl3/breeze-core/wiki/Installing-on-OPNsense)
 source/    recipes for packagers: Arch PKGBUILD (source venv build),
            Gentoo -bin ebuild (+acct-user/group), Void xbps-src template
 ../flake.nix   Nix flake (source build) + NixOS module

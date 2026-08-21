@@ -38,4 +38,4 @@ public halves are published in the tree as `/breeze-core.asc` and
 - nginx vhost `bolero.conf`: TLS (certbot), static-only with `autoindex`,
   dedicated access log, rate + connection limits, no proxying.
 - End-user instructions live on the repo landing page (`index.html`) and in
-  [docs/PACKAGES.md](../../docs/PACKAGES.md).
+  [https://github.com/monikapurpl3/breeze-core/wiki/Installing-from-packages](https://github.com/monikapurpl3/breeze-core/wiki/Installing-from-packages).

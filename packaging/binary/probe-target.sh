@@ -4,7 +4,7 @@
 #   packaging/binary/probe-target.sh linux/mips64le mips64le/debian:bookworm-slim
 #
 # Generalisation of packaging/termux/probe-target.sh, which paid for itself twice
-# by disproving assumptions cheaply (see docs/POC-CROSS-BUILDS.md §4). Installs
+# by disproving assumptions cheaply (see https://github.com/monikapurpl3/breeze-core/wiki/Proof-of-concept-architectures §4). Installs
 # nothing but python3 and prints the ABI, the wheel tags its pip will accept, and
 # whether the distro simply ships the packages already — which is cheaper than
 # any build we could do.

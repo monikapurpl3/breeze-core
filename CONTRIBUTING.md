@@ -35,7 +35,7 @@ The repo's [`CLAUDE.md`](CLAUDE.md) documents the architecture and the load-bear
 - **Preserve the wire contract** — the `serialize()` shape, `ControlRequest` fields, and error codes are depended on by the web UI, the CLIs, and the app.
 - **Secrets** are compared constant-time and stored only hashed; keep it that way. Don't log keys/tokens.
 - **Strict CSP** in the UI: keep CSS in `styles.css` and JS in modules — no inline styles/scripts.
-- Keep [`HARDENING.md`](HARDENING.md) in sync when you change auth, settings, middleware, or the systemd unit.
+- Keep [`https://github.com/monikapurpl3/breeze-core/wiki/Exposing-it-safely`](https://github.com/monikapurpl3/breeze-core/wiki/Exposing-it-safely) in sync when you change auth, settings, middleware, or the systemd unit.
 
 ## Which ports get rebuilt for a release
 
@@ -54,7 +54,7 @@ almost every real install, so they go out first and the rest follow.
 4. **OPNsense** — the `os-breeze-core` plugin: `packaging/opnsense/build-plugin.sh`
    then `verify-plugin.sh`. It needs its own build rather than the FreeBSD package
    because OPNsense is `FreeBSD:14:amd64` with python311 and neither rust nor pip,
-   so the runtime is vendored — [docs/OPNSENSE.md](docs/OPNSENSE.md).
+   so the runtime is vendored — [https://github.com/monikapurpl3/breeze-core/wiki/Installing-on-OPNsense](https://github.com/monikapurpl3/breeze-core/wiki/Installing-on-OPNsense).
 5. **OpenWrt** `.ipk` feed.
 
 **Tier 2 — occasionally.** **Termux** (Android): every major version, or every
@@ -65,7 +65,7 @@ under emulation (`packaging/termux/`), but it is not release-blocking.
 architectures — MIPS (OpenWrt + Debian), ppc64le, s390x — stay at whatever
 version they were last built for, and the published artifacts say so plainly.
 They are developer aids, not a support commitment. Recipes and every trap:
-[docs/POC-CROSS-BUILDS.md](docs/POC-CROSS-BUILDS.md).
+[https://github.com/monikapurpl3/breeze-core/wiki/Proof-of-concept-architectures](https://github.com/monikapurpl3/breeze-core/wiki/Proof-of-concept-architectures).
 
 **OPNsense is tier 1 as of 3.1.0**, listed above between BSD and OpenWrt. It is a
 real plugin — a page under Services, service control through configd, an rc

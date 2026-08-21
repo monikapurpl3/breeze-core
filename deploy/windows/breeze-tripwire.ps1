@@ -5,7 +5,7 @@
 .DESCRIPTION
     Tails Caddy's JSON access log and bans abusive source IPs with Windows
     Firewall block rules - the Windows analogue of the fail2ban jails in
-    HARDENING.md sec.3. Two triggers:
+    https://github.com/monikapurpl3/breeze-core/wiki/Exposing-it-safely sec.3. Two triggers:
 
       * general : too many 4xx/5xx from one IP inside a window  -> ban
       * tripwire: ANY 403 on an admin endpoint (/api/auth/enroll/approve,

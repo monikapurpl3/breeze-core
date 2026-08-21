@@ -4,7 +4,7 @@
 #   packaging/termux/probe-target.sh aarch64 > cross-sysroot-aarch64.tar
 #
 # ── Why this runs before any cross-compiling ────────────────────────────────
-# docs/POC-CROSS-BUILDS.md names one unknown that decides whether the whole
+# https://github.com/monikapurpl3/breeze-core/wiki/Proof-of-concept-architectures names one unknown that decides whether the whole
 # approach works: a cross-built wheel has to be installable by the *target's*
 # pip, and its extension modules have to match the target interpreter's ABI. Both
 # are facts about Termux's CPython, not things to reason about from the outside —

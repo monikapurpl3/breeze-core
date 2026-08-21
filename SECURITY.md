@@ -18,11 +18,11 @@ Please give a reasonable window to fix before any public disclosure. There's no 
 
 In scope: the API/auth/enrollment logic, the scheduler, the web UI, privilege/isolation issues in the shipped systemd unit and docs, and anything that lets an unauthorized party read or control units.
 
-Out of scope: issues that require an already-compromised host or LAN, self-inflicted misconfiguration contrary to [HARDENING.md](HARDENING.md), and vulnerabilities in third-party dependencies (report those upstream, but do tell us if we're using them unsafely).
+Out of scope: issues that require an already-compromised host or LAN, self-inflicted misconfiguration contrary to [https://github.com/monikapurpl3/breeze-core/wiki/Exposing-it-safely](https://github.com/monikapurpl3/breeze-core/wiki/Exposing-it-safely), and vulnerabilities in third-party dependencies (report those upstream, but do tell us if we're using them unsafely).
 
 ## Hardening
 
-If you're deploying Breeze Core publicly, **[HARDENING.md](HARDENING.md)** is the review + go-live checklist (TLS, rate limiting, fail2ban, systemd egress lockdown, admin-endpoint LAN gating). Following it closes the common exposure risks.
+If you're deploying Breeze Core publicly, **[https://github.com/monikapurpl3/breeze-core/wiki/Exposing-it-safely](https://github.com/monikapurpl3/breeze-core/wiki/Exposing-it-safely)** is the review + go-live checklist (TLS, rate limiting, fail2ban, systemd egress lockdown, admin-endpoint LAN gating). Following it closes the common exposure risks.
 
 ## Handling of secrets
 

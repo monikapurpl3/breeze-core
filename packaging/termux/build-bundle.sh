@@ -46,7 +46,7 @@ echo "==> $ARCH via $IMAGE (commit $COMMIT, -j$JOBS, emulated=$EMULATED)" >&2
 # Stage A output, if there is any: a directory of wheels cross-built on the host
 # by cross-wheel.sh. With it, nothing Rust-shaped ever runs under emulation —
 # which is the entire point, because that is precisely what deadlocked here twice.
-# See docs/POC-CROSS-BUILDS.md.
+# See https://github.com/monikapurpl3/breeze-core/wiki/Proof-of-concept-architectures.
 WHEELSTAGE=""
 if [ -n "${POC_WHEELHOUSE:-}" ]; then
   [ -d "$POC_WHEELHOUSE" ] || { echo "POC_WHEELHOUSE is not a directory: $POC_WHEELHOUSE" >&2; exit 1; }

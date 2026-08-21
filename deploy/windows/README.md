@@ -1,7 +1,7 @@
 # Windows deployment files
 
 Scripts + installer for running Breeze Core on Windows. Full guide:
-**[../../docs/WINDOWS.md](../../docs/WINDOWS.md)**.
+**[https://github.com/monikapurpl3/breeze-core/wiki/Installing-on-Windows](https://github.com/monikapurpl3/breeze-core/wiki/Installing-on-Windows)**.
 
 | File | What it is |
 |---|---|

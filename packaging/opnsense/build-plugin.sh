@@ -6,7 +6,7 @@
 # Output: packaging/out/opnsense/os-breeze-core-<ver>.pkg
 #
 # Why this needs its own build rather than reusing the FreeBSD package, and every
-# trap encountered getting here, are written up in docs/OPNSENSE.md. The short
+# trap encountered getting here, are written up in https://github.com/monikapurpl3/breeze-core/wiki/Installing-on-OPNsense. The short
 # version: OPNsense is FreeBSD:14 with python311 and no rust, no pip, and none of
 # our dependencies — so the whole runtime is vendored and built in a FreeBSD 14
 # userland on the builder VM.

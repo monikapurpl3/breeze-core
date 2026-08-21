@@ -7,8 +7,8 @@ contact_links:
     url: https://github.com/monikapurpl3/breeze/issues
     about: Bugs or requests for the mobile app belong in the app repo.
   - name: Installing, upgrading, or exposing it safely
-    url: https://github.com/monikapurpl3/breeze-core/blob/main/docs/PACKAGES.md
-    about: Per-distro install, the signed repo, BSDs, OpenWrt, Windows, Nix — and HARDENING.md before you put it on the internet.
+    url: https://github.com/monikapurpl3/breeze-core/blob/main/https://github.com/monikapurpl3/breeze-core/wiki/Installing-from-packages
+    about: Per-distro install, the signed repo, BSDs, OpenWrt, Windows, Nix — and https://github.com/monikapurpl3/breeze-core/wiki/Exposing-it-safely before you put it on the internet.
   - name: Something already broken? Check the troubleshooting guide
-    url: https://github.com/monikapurpl3/breeze-core/blob/main/docs/TROUBLESHOOTING.md
+    url: https://github.com/monikapurpl3/breeze-core/blob/main/https://github.com/monikapurpl3/breeze-core/wiki/Troubleshooting
     about: 401s and their reason codes, LAN-only approval behind a proxy, SELinux, fail2ban lockouts.

@@ -109,5 +109,5 @@ cat <<EOF
   3. Enable + start:          $ENABLE && $START
 
   Then open http://<BREEZE_HOST>:8420. Strongest isolation on BSD is a jail
-  (FreeBSD) / pledge-style confinement — see HARDENING.md.
+  (FreeBSD) / pledge-style confinement — see https://github.com/monikapurpl3/breeze-core/wiki/Exposing-it-safely.
 EOF

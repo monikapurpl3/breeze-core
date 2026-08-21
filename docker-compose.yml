@@ -37,7 +37,7 @@ services:
     <<: *common
     image: ghcr.io/monikapurpl3/breeze-core:latest
     # Bind the LAN address, or keep 127.0.0.1 and front it with your own proxy
-    # (docs/REVERSE-PROXY.md). With host networking, 0.0.0.0 means every
+    # (https://github.com/monikapurpl3/breeze-core/wiki/Reverse-proxy-and-TLS). With host networking, 0.0.0.0 means every
     # interface — WAN included — which is not what you want.
     command: ["/opt/breeze/venv/bin/uvicorn", "meow_ac.app:app",
               "--host", "127.0.0.1", "--port", "8420"]

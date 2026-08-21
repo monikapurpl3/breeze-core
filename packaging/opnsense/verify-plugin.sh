@@ -36,12 +36,15 @@ echo "=== documented CLI verbs exist ==="
 verbs="$(sed -n 's/.*sub\.add_parser("\([a-z]*\)".*/\1/p' meow_ac/cli/main.py | tr '\n' ' ')"
 echo "  CLI offers: $verbs"
 unknown=""
+# The OPNsense doc moved to the wiki, so it is no longer scannable from here --
+# only the plugin's own text is. That is the part that ships, so it is the part
+# that matters; wiki prose cannot be checked by CI at all.
 # --exclude this file: it is the test, not user-facing text, and the paragraph
 # above necessarily contains the very string it is looking for. Scanning itself
 # made the guard fail on its own comment -- plus 'the' and 'plugin' out of the
 # prose. With the verifier excluded every remaining match is a real instruction
 # to a real admin, so no ignore-list of English words is needed.
-for w in $(grep -rhoE 'breeze-core [a-z]+' packaging/opnsense docs/OPNSENSE.md \
+for w in $(grep -rhoE 'breeze-core [a-z]+' packaging/opnsense \
              --exclude=verify-plugin.sh 2>/dev/null \
              | awk '{print $2}' | sort -u); do
     case " $verbs " in
