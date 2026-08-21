@@ -25,6 +25,39 @@ if [ $# -gt 0 ]; then TARGETS=("$@"); else
   done
 fi
 [ ${#TARGETS[@]} -gt 0 ] || { echo "no bundles in packaging/out — run build-binaries.sh first"; exit 1; }
+# Refuse to label a stale bundle with this version.
+#
+# Bundle directories are not cleaned between releases, so an architecture that
+# was skipped this time -- riscv64 compiles every dependency from source under
+# emulation and takes hours, so it is deliberately skipped -- leaves the previous
+# release's binary sitting there, and nfpm will happily wrap it carrying the new
+# version number. That shipped as far as the artifact list twice, for 3.1.0 and
+# again for 3.2.0, caught by hand both times.
+#
+# The check is on the VERSION the bundle was built for, not the commit: commits
+# land after a build (a docs fix, a packaging fix like this one) without making
+# the binaries stale, and comparing to HEAD would reject perfectly good bundles.
+WANT_VERSION="$(grep -m1 '^__version__' meow_ac/__init__.py | cut -d'"' -f2)"
+KEPT=()
+for t in "${TARGETS[@]}"; do
+  info="packaging/out/bundle-$t/BUILDINFO"
+  if [ ! -f "$info" ]; then
+    echo "  SKIPPING $t: no BUILDINFO — built before this check existed, so" >&2
+    echo "           its version cannot be confirmed. Rebuild it." >&2
+    continue
+  fi
+  got="$(sed -n 's/^version=//p' "$info" | tr -d '
+ ')"
+  if [ "$got" != "$WANT_VERSION" ]; then
+    echo "  SKIPPING $t: that bundle is version $got, not $WANT_VERSION." >&2
+    echo "           Rebuild it with packaging/binary/build-binaries.sh, or accept" >&2
+    echo "           that this architecture stays on its previous release." >&2
+    continue
+  fi
+  KEPT+=("$t")
+done
+TARGETS=("${KEPT[@]}")
+[ ${#TARGETS[@]} -gt 0 ] || { echo "no bundle matches version $WANT_VERSION — nothing to package"; exit 1; }
 
 # Docker Desktop on Windows does not always share the drive a bind mount asks
 # for: the container starts fine, /work is simply empty, and the only symptom

@@ -9,6 +9,7 @@ set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
 COMMIT="$(git rev-parse --short HEAD)"
+BUNDLE_VERSION="$(grep -m1 '^__version__' meow_ac/__init__.py | cut -d'"' -f2)"
 OUT=packaging/out
 
 ALL=(glibc-amd64 glibc-arm64 musl-amd64 musl-arm64 musl-riscv64)
@@ -54,6 +55,15 @@ for t in "${TARGETS[@]}"; do
   # nfpm/tar restore mode 0755 explicitly at packaging time).
   test -s "$OUT/bundle-$t/breeze-core/breeze-core" \
     || { echo "FAIL: no binary in $OUT/bundle-$t"; exit 1; }
+  # Record what this bundle IS, for whoever packages it later. Bundle
+  # directories are not cleaned between releases, so an architecture skipped
+  # this time (riscv64 compiles everything from source under emulation and
+  # takes hours) leaves the previous release's binary sitting there -- and nfpm
+  # will wrap it carrying the NEW version number. That got caught by hand for
+  # 3.1.0 and again for 3.2.0; this is so it does not need catching a third time.
+  printf "version=%s\ncommit=%s\nbuilt=%s\n" \
+      "$BUNDLE_VERSION" \
+      "$COMMIT" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$OUT/bundle-$t/BUILDINFO"
   echo "    -> $OUT/bundle-$t/breeze-core"
 done
 
