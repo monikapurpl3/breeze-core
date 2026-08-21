@@ -70,6 +70,28 @@ if [ -n "$missing" ]; then
   exit 1
 fi
 
+# Refuse to publish key material. This tree goes to a PUBLIC web root, which
+# makes it the worst possible place for a stray private key -- worse than the
+# build VMs the keys already leaked to once. The rules mirror
+# packaging/lib/src-tar.sh; they are applied to the directory rather than to a
+# tarball because the upload streams (tar -cf - | ssh) and never materialises one.
+#
+# Scope note, stated rather than hidden: the name rules cover every file, and the
+# PEM content scan covers files under 1 MB. The remaining ~1.2 GB is
+# already-compressed packages whose contents a text grep could not read anyway,
+# and which are built by the packagers rather than copied in by hand.
+echo "=== checking for key material ==="
+leaks="$(find "$OUT" \( -name '*.rsa' -o -name 'usign.sec' -o -name 'gpg-private*' \) -print 2>/dev/null)"
+leaks="$leaks$(find "$OUT" -path '*/packaging/repo/keys/*' -print 2>/dev/null)"
+leaks="$leaks$(find "$OUT" -type f -size -1024k -print0 2>/dev/null   | xargs -0 grep -l -- '^-----BEGIN [A-Z ]*PRIVATE KEY-----' 2>/dev/null)"
+if [ -n "$(printf '%s' "$leaks" | tr -d '[:space:]')" ]; then
+  echo "PUBLISH ABORTED: key material in $OUT:"
+  printf '%s
+' "$leaks" | sed '/^$/d;s/^/  /'
+  exit 1
+fi
+echo "  none"
+
 echo "=== normalising ownership/permissions ==="
 if [ -n "$(find "$OUT" ! -readable -print -quit 2>/dev/null)" ]; then
   sudo chown -R "$(id -un):$(id -gn)" "$OUT"

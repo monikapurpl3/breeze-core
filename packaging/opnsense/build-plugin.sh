@@ -30,8 +30,13 @@ mkdir -p "$OUT"
 echo "==> os-breeze-core $VER  (builder $USER_AT, $ROOT, FreeBSD $FB_BASE)" >&2
 
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
-tar -czf "$TMP/src.tar.gz" --exclude='.git' --exclude='meow_ac/_commit.txt' --exclude='.venv' --exclude='packaging/out' \
-    --exclude='__pycache__' --exclude='*.pyc' .
+# An ALLOWLIST, not `tar . --exclude=...`. The remote side reads exactly three
+# things out of this archive -- meow_ac/, static/ and packaging/opnsense/files/
+# -- and the denylist version this replaces shipped the whole working tree to
+# the build VM, signing keys included. src_tar_allow also refuses to hand over
+# an archive containing key material. See packaging/lib/src-tar.sh.
+. packaging/lib/src-tar.sh
+src_tar_allow "$TMP/src.tar.gz" meow_ac static packaging/opnsense/files
 scp -q -o BatchMode=yes "$TMP/src.tar.gz" "$USER_AT:/tmp/bc-opn-src.tar.gz"
 
 # No -n here: stdin IS the heredoc carrying the remote script, and -n points
