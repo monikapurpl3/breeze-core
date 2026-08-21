@@ -75,6 +75,7 @@ Everything lives in the **[wiki](https://github.com/monikapurpl3/breeze-core/wik
 | [Exposing it safely](https://github.com/monikapurpl3/breeze-core/wiki/Exposing-it-safely) · [Reverse proxy and TLS](https://github.com/monikapurpl3/breeze-core/wiki/Reverse-proxy-and-TLS) | reaching it from outside the house |
 | [Troubleshooting](https://github.com/monikapurpl3/breeze-core/wiki/Troubleshooting) | when something is off |
 | [Architecture](https://github.com/monikapurpl3/breeze-core/wiki/Architecture) · [Building and releasing](https://github.com/monikapurpl3/breeze-core/wiki/Building-and-releasing) | working on it |
+| [Version history](https://github.com/monikapurpl3/breeze-core/wiki/Version-history) | what each release, v1.0.0 onwards, actually gave you |
 
 ## Honest limits
 
