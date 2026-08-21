@@ -16,6 +16,12 @@ HOST="${1:-192.168.122.131}"
 USER_AT="${BSD_USER:-monika}@$HOST"
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"; cd "$REPO"
 VER="$(sed -n 's/^__version__ = "\(.*\)"/\1/p' meow_ac/__init__.py)"
+# The build stamp /api/version and `breeze-core version` report. It has to be
+# passed in and written explicitly: this build tars the WORKING TREE, and
+# meow_ac/_commit.txt is gitignored -- so whatever stale copy a developer
+# happened to have locally got packaged and reported as the running build. An
+# OPNsense install claimed commit 987911d for weeks because of exactly that.
+SHA="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
 ROOT="${FB14_ROOT:-/jail/fb14}"
 FB_BASE="${FB_BASE:-14.3-RELEASE}"
 OUT=packaging/out/opnsense
@@ -24,14 +30,14 @@ mkdir -p "$OUT"
 echo "==> os-breeze-core $VER  (builder $USER_AT, $ROOT, FreeBSD $FB_BASE)" >&2
 
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
-tar -czf "$TMP/src.tar.gz" --exclude='.git' --exclude='.venv' --exclude='packaging/out' \
+tar -czf "$TMP/src.tar.gz" --exclude='.git' --exclude='meow_ac/_commit.txt' --exclude='.venv' --exclude='packaging/out' \
     --exclude='__pycache__' --exclude='*.pyc' .
 scp -q -o BatchMode=yes "$TMP/src.tar.gz" "$USER_AT:/tmp/bc-opn-src.tar.gz"
 
 # No -n here: stdin IS the heredoc carrying the remote script, and -n points
 # stdin at /dev/null, so the remote side runs nothing at all and the only
 # symptom is a missing artefact at the end.
-ssh -o BatchMode=yes "$USER_AT" "VER='$VER' ROOT='$ROOT' FB_BASE='$FB_BASE' sh -s" <<'REMOTE'
+ssh -o BatchMode=yes "$USER_AT" "VER='$VER' SHA='$SHA' ROOT='$ROOT' FB_BASE='$FB_BASE' sh -s" <<'REMOTE'
 set -eu
 
 # ---------------------------------------------------------- 1. FreeBSD 14 root
@@ -77,6 +83,7 @@ doas chroot "$ROOT" /bin/sh -c '
     rm -rf "$P/meow_ac" "$P/static"
     cp -R /tmp/src/meow_ac /tmp/src/static "$P/"
     cp /tmp/src/packaging/opnsense/files/usr/local/lib/breeze-core/serve.sh "$P/serve.sh"
+    printf "%s\n" "$SHA" > "$P/meow_ac/_commit.txt"
     find "$P" -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
     "$P/venv/bin/python3.11" -c "import fastapi, uvicorn, msmart, pydantic_core; print(\"  runtime ok, pydantic_core\", pydantic_core.__version__)"
 '
