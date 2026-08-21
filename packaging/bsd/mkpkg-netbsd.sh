@@ -14,6 +14,16 @@
 #   sh packaging/bsd/mkpkg-netbsd.sh [output-dir]
 set -eu
 
+# Needs root, unlike the FreeBSD script: this one stages the rc script INTO
+# the prefix ($PREFIX/share/examples/rc.d), which is root-owned. Without this
+# check the failure is a bare "cp: ... Permission denied" three lines later,
+# which reads like a broken script rather than a missing doas.
+if [ "$(id -u)" != 0 ]; then
+    echo "mkpkg-netbsd.sh writes into $(pkg_info -Q LOCALBASE pkg_install 2>/dev/null || echo /usr/pkg) — run it as root:" >&2
+    echo "    doas sh packaging/bsd/mkpkg-netbsd.sh [output-dir]" >&2
+    exit 1
+fi
+
 OUT="${1:-.}"
 VER="$(sed -n 's/^__version__ = "\(.*\)"/\1/p' meow_ac/__init__.py)"
 PREFIX=/usr/pkg
