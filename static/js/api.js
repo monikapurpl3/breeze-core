@@ -7,13 +7,27 @@
 // every call. If you add new API calls, route them through apiFetch —
 // never call fetch() directly.
 //
-// Two secrets live in localStorage:
+// The enrollment key lives in localStorage:
 //   meow_ac_key           the shared enrollment key (prompted for)
-//   meow_ac_device_token  this device's access token (obtained by
-//                         completing the pairing flow — see enroll.js)
-// apiFetch does not auto-clear either on 401; app.js/enroll.js own that
-// decision, because a 401 can mean "wrong key" or "token expired" and
-// the recovery differs.
+//
+// The per-device credential is one of two things:
+//   * auth v2 (preferred) — an Ed25519 key pair in IndexedDB, whose private
+//     half is non-extractable: WebCrypto will sign with it and will not hand it
+//     to the page. Every request carries a signature instead of a secret. See
+//     signer.js.
+//   * auth v1 (fallback)  — a bearer token in localStorage
+//     (meow_ac_device_token), used when the browser has no Ed25519 or when the
+//     device was paired before v2 existed.
+//
+// The panel was the last client still on v1; the app has signed its requests
+// since Breeze Core 3.0.0. Now a server set to AC_MIN_AUTH_VERSION=2 can refuse
+// unsigned clients without refusing its own web panel.
+//
+// apiFetch does not auto-clear either credential on 401; app.js/enroll.js own
+// that decision, because a 401 can mean "wrong key" or "token expired" and the
+// recovery differs.
+
+import { loadSigner, clearSigner } from "./signer.js";
 
 const KEY_STORAGE = "meow_ac_key";
 const TOKEN_STORAGE = "meow_ac_device_token";
@@ -43,14 +57,79 @@ export function clearDeviceToken(){
   localStorage.removeItem(TOKEN_STORAGE);
 }
 
-// Thin fetch wrapper: attaches the API key and (if present) the device
-// token. Returns the raw Response — callers inspect status so they can
-// tell "needs pairing" (401) from other failures.
+// The signer, looked up once per page load. `undefined` = not looked yet,
+// `null` = this browser has no signing credential and should use the token.
+let _signer;
+
+async function currentSigner(){
+  if(_signer === undefined) _signer = await loadSigner();
+  return _signer;
+}
+
+/** Adopt a signer straight after enrolment, so the very next request is signed
+ *  without waiting for a reload. */
+export function adoptSigner(signer){ _signer = signer; }
+
+/** Throw away the signing credential (a definitively rejected one). */
+export async function forgetSigner(){
+  _signer = null;
+  await clearSigner();
+}
+
+export async function hasSigner(){ return !!(await currentSigner()); }
+
+// What the server signs over is the path INCLUDING the query string, taken from
+// the parsed URL. Deriving it here rather than trusting the caller's string
+// means a relative path, or one with a query, still signs correctly — a
+// mismatch would be a 401 with a "bad signature" that looks like a broken key.
+function signablePath(path){
+  const u = new URL(path, location.origin);
+  return u.pathname + (u.search || "");
+}
+
+// Thin fetch wrapper: attaches the API key plus this device's credential —
+// either five signature headers (v2) or the bearer token (v1). Returns the raw
+// Response, so callers can still tell "needs pairing" (401) from other failures.
 export async function apiFetch(path, opts = {}){
+  return sendWithRetry(path, opts, true);
+}
+
+async function sendWithRetry(path, opts, mayRetry){
+  const method = (opts.method || "GET").toUpperCase();
   const headers = Object.assign({}, opts.headers, {"X-API-Key": getApiKey()});
-  const token = getDeviceToken();
-  if(token) headers["Authorization"] = "Bearer " + token;
-  return fetch(path, Object.assign({}, opts, {headers}));
+  const signer = await currentSigner();
+
+  if(signer){
+    const body = typeof opts.body === "string" ? opts.body : "";
+    Object.assign(headers, await signer.headers(method, signablePath(path), body));
+  }else{
+    const token = getDeviceToken();
+    if(token) headers["Authorization"] = "Bearer " + token;
+  }
+
+  const res = await fetch(path, Object.assign({}, opts, {headers}));
+  if(res.status !== 401 || !signer || !mayRetry) return res;
+
+  // A signed request can fail for two reasons that are nothing to do with the
+  // credential, and both are fixable here rather than by making the user
+  // re-pair. This is the same lesson the app learned the hard way in 2.1.1:
+  // treating every 401 as "my credential is dead" cost people their pairing.
+  //
+  // res.clone() so the caller still gets an unread body if this turns out not
+  // to be retryable. Safe on a 401: it is a short JSON error, never a stream.
+  let detail = null;
+  try{ detail = (await res.clone().json())?.detail; }catch{ /* not JSON */ }
+  if(!detail?.retryable) return res;
+
+  if(detail.error === "clock_skew" && typeof detail.server_time === "number"){
+    // This machine's clock is outside the server's window. Learn the offset and
+    // sign with SERVER time from now on, instead of failing every request.
+    signer.clockOffsetSeconds = Math.round(detail.server_time - Date.now() / 1000);
+    console.warn("breeze: clock is off by ~" + signer.clockOffsetSeconds + "s; using server time");
+  }
+  // Anything else retryable (a replayed nonce, from a request the browser
+  // retried on its own) just needs a fresh nonce, which the retry generates.
+  return sendWithRetry(path, opts, false);
 }
 
 // Consume a Server-Sent Events endpoint — deliberately over fetch(), NOT

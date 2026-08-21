@@ -3,7 +3,7 @@
 // It's the only module that combines transport (api.js), pairing
 // (enroll.js), and rendering (unit-card.js).
 
-import { apiFetch, apiStream, clearDeviceToken } from "./api.js";
+import { apiFetch, apiStream, clearDeviceToken, forgetSigner } from "./api.js";
 import { buildPanel, render, setError, setName } from "./unit-card.js";
 import { enroll } from "./enroll.js";
 import {
@@ -27,15 +27,24 @@ let streamAbort = null;    // AbortController for the live stream, if open
 let streamRetry = STREAM_RETRY_MS;
 let pollTimer = null;      // only non-null while falling back to polling
 
-// A 401 on a normally-authorized request means the device token is
-// missing/expired. Clear it and re-run pairing; because apiFetch reads
-// the token from localStorage on every call, the next poll tick just
-// works once a new token is stored. Guarded so concurrent 401s (one per
-// panel) trigger a single pairing flow.
+// A 401 that survived apiFetch's own retry means this device's credential is
+// finished, whichever kind it is: clear it and re-run pairing. Both are dropped
+// because only one of them is in use and the other is already absent — and
+// leaving a stale signing key behind would have the panel keep signing with a
+// key the server has forgotten.
+//
+// Guarded so concurrent 401s (one per panel) trigger a single pairing flow.
+//
+// Note what is NOT here: any decision about whether a 401 is fatal. apiFetch
+// already retried the two rejections that are recoverable (a clock outside the
+// server's window, a replayed nonce), so anything arriving here has been
+// through that filter. Getting this distinction wrong is what cost the Android
+// app its users' pairings before 2.1.1.
 async function reauth(){
   if(reauthing) return;
   reauthing = true;
   clearDeviceToken();
+  await forgetSigner();
   try{ await enroll(); }
   finally{ reauthing = false; }
 }
@@ -122,8 +131,9 @@ async function loadUnits(){
     if(res.ok) return await res.json();
     if(res.status === 401){
       clearDeviceToken();
-      await enroll();   // resolves once a device token is stored
-      continue;         // retry with the new token
+      await forgetSigner();
+      await enroll();   // resolves once a credential is held
+      continue;         // retry with it
     }
     document.getElementById("globalStatus").textContent = "can't load units (" + res.status + ")";
     return null;

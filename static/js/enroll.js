@@ -5,10 +5,21 @@
 //   2. an admin approves that code on the LAN
 //   3. poll /api/auth/enroll/poll   → on approval, store the device token
 //
-// enroll() resolves true once a device token has been stored; the caller
-// (app.js) then retries the request that triggered pairing.
+// The credential depends on what the browser can do. Where WebCrypto has
+// Ed25519 (auth v2) a key pair is generated here and only the PUBLIC half is
+// ever sent: enrolment registers it, so there is no shared secret to be issued,
+// intercepted, or leaked from the server's devices.json. Otherwise the server
+// issues a bearer token exactly once (auth v1) and that is stored instead.
+//
+// Which of the two happened is decided by what the SERVER says came back, not by
+// what this code asked for: a pre-3.0 server ignores the v2 fields and issues a
+// token, and that has to keep working.
+//
+// enroll() resolves true once a credential is held; the caller (app.js) then
+// retries the request that triggered pairing.
 
-import { apiFetch, clearApiKey, setDeviceToken } from "./api.js";
+import { adoptSigner, apiFetch, clearApiKey, setDeviceToken } from "./api.js";
+import { ed25519Supported, generateSigner, persistSigner } from "./signer.js";
 
 const POLL_MS = 2000;
 
@@ -41,17 +52,36 @@ export function enroll(){
 
     ov.classList.remove("hidden");
 
+    // The key pair for the enrolment in progress. Persisted only once the
+    // server approves it — a key stored earlier would be an orphan if the user
+    // closed the overlay.
+    let pending = null;
+
     async function begin(){
       clearError();
       startBtn.disabled = true;
       const label = (labelInput.value || "").trim();
+
+      const payload = {label};
+      pending = null;
+      if(await ed25519Supported()){
+        try{
+          pending = await generateSigner();
+          payload.auth_version = 2;
+          payload.public_key = pending.publicKeyB64;
+        }catch(e){
+          // Fall back rather than block pairing: a bearer token still works.
+          console.warn("breeze: could not generate a signing key —", e.message);
+          pending = null;
+        }
+      }
 
       let res;
       try{
         res = await apiFetch("/api/auth/enroll/start", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({label})
+          body: JSON.stringify(payload)
         });
       }catch(e){
         showError("network error — " + e.message);
@@ -101,9 +131,21 @@ export function enroll(){
         if(!pres.ok) return;
 
         const data = await pres.json();
-        if(data.status === "approved" && data.device_token){
+        if(data.status === "approved" && (data.device_token || (pending && data.auth_version === 2))){
           stopTimers();
-          setDeviceToken(data.device_token);
+          if(data.auth_version === 2 && pending){
+            // v2: keep the private key (non-extractable, in IndexedDB) and bind
+            // it to the id the server just issued. Nothing secret crossed the
+            // wire in either direction.
+            const signer = await persistSigner(
+              data.token_id, pending.privateKey, pending.publicKeyB64,
+            );
+            adoptSigner(signer);
+          }else{
+            // v1: the bearer token is delivered exactly once, here.
+            setDeviceToken(data.device_token);
+          }
+          pending = null;
           ov.classList.add("hidden");
           resolve(true);
         }else if(data.status === "expired" || data.status === "unknown"){
