@@ -45,11 +45,7 @@ def _commit() -> str:
         f = pkg / "_commit.txt"
         if f.is_file():
             text = f.read_text().strip()
-            # In a git checkout the file is still git-archive's placeholder
-            # ("$Format:%h$"), because substitution only happens when the archive
-            # is created. Reporting that verbatim would be worse than useless, so
-            # fall through to asking git directly.
-            if text and not text.startswith("$Format"):
+            if text:
                 return text[:12]
     except OSError:
         pass
