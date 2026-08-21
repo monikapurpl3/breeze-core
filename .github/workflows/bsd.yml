@@ -16,6 +16,13 @@ on:
       - "packaging/bsd/**"
       - ".github/workflows/bsd.yml"
 
+# These jobs boot real BSD VMs to test an install; none of them writes anything
+# back to the repository, so read-only is the whole requirement. Declared
+# explicitly because the default token is broader than that, and a workflow with
+# no permissions block inherits whatever the repository default happens to be.
+permissions:
+  contents: read
+
 jobs:
   freebsd:
     runs-on: ubuntu-latest
