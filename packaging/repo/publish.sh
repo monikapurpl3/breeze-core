@@ -13,6 +13,14 @@ cd "$REPO"
 HOST="${REPO_HOST:-mrrp}"
 ROOT="${REPO_ROOT:-/var/www/bolero}"
 OUT="packaging/out/repo"
+# Sections that are NOT rebuilt every release, carried over from the previous
+# one server-side instead of being re-uploaded.
+#
+# /poc/ is ~180 MB of deliberately frozen proof-of-concept artifacts (tier 3:
+# built once, never again). Keeping a local copy solely to satisfy a whole-tree
+# publish is silly, and re-uploading them every release is worse. Carrying them
+# forward on the host costs one cp -a.
+CARRY="${CARRY:-poc}"
 TS="$(date +%Y%m%d-%H%M%S)"
 
 [ -f "$OUT/index.html" ] || { echo "no repo tree — run build-repo.sh first"; exit 1; }
@@ -47,6 +55,11 @@ fi
 missing=""
 for link in $(grep -oE 'href="/[^"#]*"' "$OUT/index.html" | sed 's/href="//;s/"$//' | sort -u); do
   target="$OUT${link%/}"
+  # A carried section is legitimately absent locally: it is copied from the
+  # previous release on the host, so it must not trip this guard.
+  carried=0
+  for c in $CARRY; do case "$link" in "/$c"|"/$c/") carried=1 ;; esac; done
+  if [ "$carried" = 1 ]; then continue; fi
   [ -e "$target" ] || [ -e "$OUT$link" ] || missing="$missing $link"
 done
 if [ -n "$missing" ]; then
@@ -81,6 +94,13 @@ tar -C "$OUT" -cf - . | ssh "$HOST" "
   # bit once: the keep-3 prune below sorted the new release 4th and deleted it
   # out from under the symlink, leaving 'current' dangling and the site 404ing.
   touch '$ROOT/releases/$TS'
+    # Carry sections that were not rebuilt. 'current' still points at the
+    # previous release here, which is exactly what we copy from.
+    for c in $CARRY; do
+      if [ ! -e '$ROOT/releases/$TS'/\$c ] && [ -e '$ROOT/current'/\$c ]; then
+        cp -a '$ROOT/current'/\$c '$ROOT/releases/$TS'/ && echo \"carried forward: \$c\"
+      fi
+    done
   ln -sfn 'releases/$TS' '$ROOT/current.new' && mv -Tf '$ROOT/current.new' '$ROOT/current'
   # Prune by NAME, not mtime: the directories are timestamp-named, so a
   # reverse sort is the reliable ordering and can't be perturbed by tar.
