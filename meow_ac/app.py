@@ -39,6 +39,7 @@ from meow_ac.api import config as config_api
 from meow_ac.api import meta as meta_api
 from meow_ac.api import metrics as metrics_api
 from meow_ac.api import programs as programs_api
+from meow_ac.api import timers as timers_api
 from meow_ac.api import system as system_api
 from meow_ac.api import units as units_api
 from meow_ac.config.store import ConfigStore
@@ -47,6 +48,8 @@ from meow_ac.devices.manager import DeviceManager
 from meow_ac.devices.stream import StateStream
 from meow_ac.programs.scheduler import Scheduler
 from meow_ac.programs.store import ProgramStore
+from meow_ac.timers.runner import TimerRunner
+from meow_ac.timers.store import TimerStore
 from meow_ac.security.api_key import ApiKeyAuthenticator
 from meow_ac.security.composite import CompositeAuthenticator
 from meow_ac.security.device_token import DeviceTokenAuthenticator
@@ -88,6 +91,11 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         token_ttl_days=settings.token_ttl_days,
     )
     scheduler = Scheduler(manager, program_store, settings.scheduler_tick_seconds)
+    # One-shot timers are their own subsystem, not a program kind: they exist to
+    # happen once and delete themselves. See meow_ac/timers/__init__.py.
+    timer_store = TimerStore(settings.timers_path)
+    timer_store.load()
+    timers = TimerRunner(manager, timer_store, settings.timer_tick_seconds)
 
     # Auth: the API key is the enrollment secret; full access also needs a
     # per-device credential. The device authenticator is version-aware
@@ -115,11 +123,13 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         await scheduler.start()
+        await timers.start()
         await stream.start()
         try:
             yield
         finally:
             await stream.stop()
+            await timers.stop()
             await scheduler.stop()
 
     app = FastAPI(title="meow-ac", lifespan=lifespan, **docs_kwargs)
@@ -169,6 +179,9 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     app.include_router(config_api.build_config_router(store, manager, full_auth))
     app.include_router(
         programs_api.build_programs_router(manager, program_store, scheduler, full_auth)
+    )
+    app.include_router(
+        timers_api.build_timers_router(manager, timer_store, timers, full_auth)
     )
     app.include_router(
         system_api.build_system_router(

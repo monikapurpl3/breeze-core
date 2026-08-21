@@ -78,6 +78,7 @@ FEATURES = [
     "metrics",          # GET /metrics (Prometheus, API-key gated)
     "live_stream",      # GET /api/units/stream — SSE live state push
     "system_info",      # GET /api/system — host/runtime/unit/device facts
+    "sleep_timer",      # POST /api/timers — one-shot "do this in N minutes"
 ]
 
 # Device auth-versions this build understands. A client feature-detects v2

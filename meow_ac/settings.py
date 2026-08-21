@@ -44,9 +44,15 @@ class Settings:
     config_path: Path
     devices_path: Path
     programs_path: Path
+    timers_path: Path
 
     # How often the background scheduler evaluates programs (seconds).
     scheduler_tick_seconds: int = 30
+
+    # How often one-shot timers are checked (seconds). Finer than the scheduler
+    # on purpose: a timer is a promise about a moment, where a schedule only has
+    # to hit the right minute.
+    timer_tick_seconds: int = 15
 
     # Interactive API docs (/docs, /redoc, /openapi.json). Off by default
     # so a public deployment doesn't leak its schema; AC_DOCS=1 in dev.
@@ -111,6 +117,8 @@ class Settings:
         devices_path = Path(devices_env) if devices_env else config_path.parent / "devices.json"
         programs_env = os.environ.get("AC_PROGRAMS")
         programs_path = Path(programs_env) if programs_env else config_path.parent / "programs.json"
+        timers_env = os.environ.get("AC_TIMERS")
+        timers_path = Path(timers_env) if timers_env else config_path.parent / "timers.json"
 
         hosts_env = os.environ.get("AC_TRUSTED_HOSTS")
         trusted_hosts = (
@@ -121,7 +129,9 @@ class Settings:
             config_path=config_path,
             devices_path=devices_path,
             programs_path=programs_path,
+            timers_path=timers_path,
             scheduler_tick_seconds=_env_int("AC_SCHED_TICK", 30),
+            timer_tick_seconds=_env_int("AC_TIMER_TICK", 15),
             docs_enabled=_env_bool("AC_DOCS", False),
             security_headers=_env_bool("AC_SECURITY_HEADERS", True),
             compression=_env_bool("AC_COMPRESSION", True),
