@@ -281,6 +281,12 @@ sed "s/@VERSION@/$VER/g" packaging/repo/index.html > "$OUT/index.html"
 # https://github.com/monikapurpl3/breeze-core/wiki/Signed-auth-v2-migration. Published so it can be opened on a phone, which
 # is the only way to answer the question for iOS and Android.
 cp packaging/repo/webcrypto-check.html "$OUT/webcrypto-check.html"
+# The dnf repo file, served so `dnf config-manager addrepo --from-repofile=`
+# works (the landing page tells people to use it) and so metadata_expire lives in
+# one place. Without that setting dnf applies its 48-hour default and a release
+# published inside the window is invisible until `dnf clean all`.
+mkdir -p "$OUT/rpm"
+cp packaging/repo/breeze-core.repo "$OUT/rpm/breeze-core.repo"
 
 echo ""
 echo "== $OUT =="

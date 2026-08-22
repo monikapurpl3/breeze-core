@@ -1,0 +1,13 @@
+[breeze-core]
+name=Breeze Core
+baseurl=https://bolero.salataputarica.hr.eu.org/rpm/$basearch/
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=https://bolero.salataputarica.hr.eu.org/breeze-core.asc
+# Without this, dnf uses its 48-hour default: after any refresh it will not look
+# at this repo again for two days, so a release published inside that window is
+# invisible to `dnf upgrade` and the only apparent fix is `dnf clean all`. The
+# check itself is a conditional GET of a 3 KB repomd.xml that answers 304 almost
+# every time, so an hour costs nothing.
+metadata_expire=1h

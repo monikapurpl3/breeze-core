@@ -81,9 +81,13 @@ fi
 # already-compressed packages whose contents a text grep could not read anyway,
 # and which are built by the packagers rather than copied in by hand.
 echo "=== checking for key material ==="
-leaks="$(find "$OUT" \( -name '*.rsa' -o -name 'usign.sec' -o -name 'gpg-private*' \) -print 2>/dev/null)"
-leaks="$leaks$(find "$OUT" -path '*/packaging/repo/keys/*' -print 2>/dev/null)"
-leaks="$leaks$(find "$OUT" -type f -size -1024k -print0 2>/dev/null   | xargs -0 grep -l -- '^-----BEGIN [A-Z ]*PRIVATE KEY-----' 2>/dev/null)"
+# The `|| true` on each of these is load-bearing, not defensive noise: grep and
+# xargs exit 1 when they match nothing, and under `set -euo pipefail` a failing
+# command substitution aborts the script. Without it the happy path -- no leaks --
+# ended the publish silently, right after printing this heading.
+leaks="$(find "$OUT" \( -name '*.rsa' -o -name 'usign.sec' -o -name 'gpg-private*' \) -print 2>/dev/null || true)"
+leaks="$leaks$(find "$OUT" -path '*/packaging/repo/keys/*' -print 2>/dev/null || true)"
+leaks="$leaks$(find "$OUT" -type f -size -1024k -print0 2>/dev/null   | xargs -0 grep -l -- '^-----BEGIN [A-Z ]*PRIVATE KEY-----' 2>/dev/null || true)"
 if [ -n "$(printf '%s' "$leaks" | tr -d '[:space:]')" ]; then
   echo "PUBLISH ABORTED: key material in $OUT:"
   printf '%s
