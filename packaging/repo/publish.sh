@@ -103,33 +103,103 @@ fi
 chmod -R u+rwX,go+rX "$OUT"
 
 echo "=== publishing to $HOST:$ROOT/releases/$TS ==="
-# NOTE: no gzip (-cf, not -czf). The tree is almost entirely already-compressed
-# packages (.deb/.rpm/.apk/.pkg.tar.zst/.ipk/.pkg/.tgz), so re-gzipping only
-# burns CPU and slows the pipe for ~zero size gain.
+# Transfer: rsync if we have it, tar otherwise.
 #
-# `set -o pipefail` matters here: without it a tar that aborts mid-stream still
-# lets the remote side swap `current` to a PARTIAL tree.
-set -o pipefail
-tar -C "$OUT" -cf - . | ssh "$HOST" "
-  set -e
-  mkdir -p '$ROOT/releases/$TS'
-  tar -xf - -C '$ROOT/releases/$TS'
-  chmod -R u+rwX,go+rX '$ROOT/releases/$TS'
-  # tar restores the SOURCE directory's mtime onto the extracted release dir,
-  # so a freshly published release can look older than its predecessors. That
-  # bit once: the keep-3 prune below sorted the new release 4th and deleted it
-  # out from under the symlink, leaving 'current' dangling and the site 404ing.
-  touch '$ROOT/releases/$TS'
-    # Carry sections that were not rebuilt. 'current' still points at the
-    # previous release here, which is exactly what we copy from.
-    for c in $CARRY; do
-      if [ ! -e '$ROOT/releases/$TS'/\$c ] && [ -e '$ROOT/current'/\$c ]; then
-        cp -a '$ROOT/current'/\$c '$ROOT/releases/$TS'/ && echo \"carried forward: \$c\"
-      fi
+# The tree is ~1.2 GB and nearly all of it is byte-identical between releases --
+# the packages for versions that already shipped never change. tar re-uploads the
+# whole thing every time, so a one-line edit to index.html cost a full 1.2 GB
+# push. rsync --link-dest sends only the delta and hardlinks the rest from the
+# previous release on the host: the timestamped-release layout and instant
+# rollback are untouched, and the three kept releases stop costing 1.2 GB each.
+#
+# Not -a: it implies -o/-g, and preserving owner needs root, which the push user
+# is not. -rlptD keeps what matters here without asking for that.
+#
+# MSYS_NO_PATHCONV stops Git Bash rewriting the remote /var/www/... argument into
+# a Windows path on its way to rsync.exe.
+RSYNC="${RSYNC:-$(command -v rsync 2>/dev/null || true)}"
+RSYNC_SSH=""
+if [ -z "$RSYNC" ] && [ -x /c/msys64/usr/bin/rsync.exe ]; then
+  RSYNC=/c/msys64/usr/bin/rsync.exe
+fi
+# On Windows, rsync must be paired with the ssh from ITS OWN MSYS install. Git
+# for Windows and msys64 each ship a different msys-2.0.dll, and mixing the two
+# in one process tree fails as "dup() in/out/err failed" with no other clue.
+#
+# That ssh then has its own HOME (/home/$USER inside msys64), so it finds neither
+# the config nor known_hosts nor the keys -- it resolved the host by mDNS to a
+# link-local address and then failed authentication. Passing the real paths is
+# what makes it work, and every private key is offered because the config's own
+# "~/..." would expand against that wrong home.
+case "$RSYNC" in
+  /c/msys64/*|/c/msys2/*)
+    _ssh="$(dirname "$RSYNC")/ssh.exe"
+    RSYNC_SSH="$_ssh -F $HOME/.ssh/config -o UserKnownHostsFile=$HOME/.ssh/known_hosts -o BatchMode=yes"
+    for _k in "$HOME"/.ssh/id_*; do
+      case "$_k" in *.pub) continue ;; esac
+      [ -f "$_k" ] && RSYNC_SSH="$RSYNC_SSH -o IdentityFile=$_k"
     done
+    ;;
+esac
+PREV="$(ssh "$HOST" "readlink '$ROOT/current' 2>/dev/null | sed 's#releases/##'" 2>/dev/null || true)"
+
+# A transfer that dies leaves a release directory that was never linked into
+# `current`. Harmless in itself, but it still consumes one of the three rollback
+# slots, and two failed attempts in a row pruned the last good release out from
+# under us. So: remove it unless the publish actually completed. The $TS glob
+# check is a guard against ever expanding this into something else.
+PUBLISHED=0
+trap '[ "$PUBLISHED" = 1 ] || ssh "$HOST" "case \"$TS\" in 20??????-??????) rm -rf \"$ROOT/releases/$TS\" ;; esac" >/dev/null 2>&1 || true' EXIT
+
+# `set -o pipefail` matters for the tar branch: without it a tar that aborts
+# mid-stream still lets the remote side keep a partial tree.
+set -o pipefail
+
+if [ -n "$RSYNC" ]; then
+  echo "  via rsync${PREV:+ (delta against $PREV)}"
+  ssh "$HOST" "mkdir -p '$ROOT/releases/$TS'"
+  linkdest=""
+  [ -n "$PREV" ] && linkdest="--link-dest=$ROOT/releases/$PREV"
+  MSYS_NO_PATHCONV=1 "$RSYNC" -rlptD --delete --stats ${RSYNC_SSH:+-e "$RSYNC_SSH"} ${linkdest:+"$linkdest"} \
+      "$OUT/" "$HOST:$ROOT/releases/$TS/" \
+    | grep -E "files transferred|Total transferred file size" | sed 's/^/  /'
+else
+  echo "  rsync not found -- full tar upload"
+  # No gzip (-cf, not -czf): the tree is almost entirely already-compressed
+  # packages, so re-gzipping burns CPU for ~zero gain.
+  tar -C "$OUT" -cf - . | ssh "$HOST" "
+    set -e
+    mkdir -p '$ROOT/releases/$TS'
+    tar -xf - -C '$ROOT/releases/$TS'
+  " || { echo "PUBLISH FAILED during upload — check '$ROOT/current' on $HOST"; exit 1; }
+fi
+
+# Finalise. Shared by both transfer paths, so neither can drift from the other --
+# an earlier draft of this left the symlink swap inside the tar branch only.
+ssh "$HOST" "
+  set -e
+  chmod -R u+rwX,go+rX '$ROOT/releases/$TS'
+  # tar and rsync both restore the SOURCE directory's mtime onto the release dir,
+  # so a fresh release can look older than its predecessors. That bit once: the
+  # keep-3 prune below sorted the new release 4th and deleted it out from under
+  # the symlink, leaving 'current' dangling and the site 404ing.
+  touch '$ROOT/releases/$TS'
+  # Carry sections that were not rebuilt. 'current' still points at the previous
+  # release at this moment, which is exactly what we copy from.
+  #
+  # cp -al, not cp -a: /poc/ is ~180 MB of deliberately frozen files, so copying
+  # them bit-for-bit into every release was the one part of a publish still
+  # costing real disk after rsync --link-dest made everything else free.
+  # Hardlinks are safe here because a published release is never edited in
+  # place -- it is replaced by the next one.
+  for c in $CARRY; do
+    if [ ! -e '$ROOT/releases/$TS'/\$c ] && [ -e '$ROOT/current'/\$c ]; then
+      cp -al '$ROOT/current'/\$c '$ROOT/releases/$TS'/ && echo \"carried forward: \$c\"
+    fi
+  done
   ln -sfn 'releases/$TS' '$ROOT/current.new' && mv -Tf '$ROOT/current.new' '$ROOT/current'
-  # Prune by NAME, not mtime: the directories are timestamp-named, so a
-  # reverse sort is the reliable ordering and can't be perturbed by tar.
+  # Prune by NAME, not mtime: the directories are timestamp-named, so a reverse
+  # sort is the reliable ordering and cannot be perturbed by the transfer.
   # Never delete whatever 'current' points at, belt and braces.
   cd '$ROOT/releases'
   keep=\"\$(basename \"\$(readlink '$ROOT/current')\")\"
@@ -140,6 +210,8 @@ tar -C "$OUT" -cf - . | ssh "$HOST" "
   test -f '$ROOT/current/index.html' || { echo 'PUBLISH BROKEN: current/index.html missing'; exit 1; }
   echo 'live releases:' && ls -1d */ | sort -r | head -3
 " || { echo "PUBLISH FAILED — check '$ROOT/current' on $HOST"; exit 1; }
+
+PUBLISHED=1
 
 echo "=== smoke check (best-effort; deploy is already live) ==="
 # Bounded + non-fatal: the public endpoint can be slow, and the swap above has
